@@ -5,6 +5,8 @@
     backlog_check.py tests <issue>    every scenario has a test, and no other test was touched
     backlog_check.py closed           nothing belonging to a closed issue has been edited
     backlog_check.py state            issues, specifications and the index agree
+    backlog_check.py behaviour        the behaviour folder is what the specifications generate
+    backlog_check.py behaviour --add <issue>   bring a built specification into it
     backlog_check.py red <issue> -- <test command>     record the new tests failing
     backlog_check.py green <issue> -- <test command>   the suite passes, after a red
 
@@ -21,12 +23,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-CHANGES_SECTION = "Changes to earlier specifications"
+CHANGES_SECTION = "Changes to current behaviour"
+OLD_CHANGES_SECTION = "Changes to earlier specifications"
+GENERATED = "<!-- Generated from the specifications by the backlog plugin. Do not edit. -->"
+INCLUDED = "Specifications included:"
 STATUSES = ("Draft", "Ready")
 
 # A scenario ID is the specification's number and a sequence: 0042-03.
 BARE_ID = re.compile(r"(?<![\w@-])(\d{4}-\d{2})(?![\w-])")
 TAG = re.compile(r"@(\d{4}-\d{2})(?![\w-])")
+AREA = re.compile(r"@area:(\S+)")
+AREA_NAME = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*(/[a-z0-9]+(-[a-z0-9]+)*)*$")
+CONTINUES = ("Examples:", "Scenarios:", "|", '"""')
 SCENARIO = re.compile(r"^\s*Scenario( Outline| Template)?:\s*(.*)$")
 REQUIREMENT = re.compile(r"^\s*-\s+\**(FR-\d+)\**\s*:")
 LINK = re.compile(r"\]\(([^)#\s]+)(#[^)]*)?\)")
@@ -87,6 +95,7 @@ def load_config():
         "featuresDir": paths.get("featuresDir", "docs/specs").rstrip("/"),
         "adrDir": paths.get("adrDir", "docs/decisions").rstrip("/"),
         "featureIndex": paths.get("featureIndex", "docs/specs/README.md"),
+        "behaviourDir": paths.get("behaviourDir", "docs/behaviour").rstrip("/"),
         "readyLabel": config.get("finalise", {}).get("readyLabel", "ready"),
         "testPaths": config.get("implement", {}).get("testPaths"),
     }
@@ -135,19 +144,47 @@ class Spec:
                 yield line
 
     def _scenarios(self):
-        scenarios, pending = [], []
-        for line in self.gherkin_lines():
-            stripped = line.strip()
-            match = SCENARIO.match(line)
-            if match:
-                ids = [i for tag_line in pending for i in TAG.findall(tag_line)]
-                scenarios.append((ids[0] if ids else None, match.group(2).strip()))
+        """Each scenario with its ID, area and text; self.scenarios keeps (id, title)."""
+        lines = list(self.gherkin_lines())
+        self.blocks, pending, feature_area, i = [], [], None, 0
+        while i < len(lines):
+            stripped = lines[i].strip()
+            match = SCENARIO.match(lines[i])
+            if stripped.startswith("Feature:"):
+                feature_area = (AREA.findall(" ".join(pending)) or [None])[-1]
                 pending = []
-            elif stripped.startswith("@"):
+            elif match:
+                tags = " ".join(line for line in pending if line.startswith("@"))
+                ids = TAG.findall(tags)
+                body = [stripped]
+                i += 1
+                while i < len(lines):
+                    following = lines[i].strip()
+                    if not following:
+                        ahead = next((l.strip() for l in lines[i:] if l.strip()), "")
+                        if not ahead.startswith(CONTINUES):
+                            break
+                    elif SCENARIO.match(lines[i]) or following.startswith("@"):
+                        break
+                    else:
+                        body.append(following)
+                    i += 1
+                self.blocks.append(
+                    {
+                        "id": ids[0] if ids else None,
+                        "title": match.group(2).strip(),
+                        "area": (AREA.findall(tags) or [feature_area])[-1],
+                        "body": body,
+                    }
+                )
+                pending = []
+                continue
+            elif stripped.startswith(("@", "#")):
                 pending.append(stripped)
-            elif stripped and not stripped.startswith("#"):
+            elif stripped:
                 pending = []
-        return scenarios
+            i += 1
+        return [(block["id"], block["title"]) for block in self.blocks]
 
     @property
     def ids(self):
@@ -194,6 +231,21 @@ class Spec:
     def ids_named_in(self, section):
         text = self.section(section)
         return set(BARE_ID.findall(text)) | set(TAG.findall(text))
+
+    @property
+    def changes(self):
+        """The name this specification uses for its changes section, if it has one."""
+        for name in (CHANGES_SECTION, OLD_CHANGES_SECTION):
+            if name in self.sections:
+                return name
+        return None
+
+    @property
+    def retires(self):
+        """IDs of scenarios from other specifications that this one replaces or removes."""
+        if not self.changes:
+            return set()
+        return self.ids_named_in(self.changes) - set(self.ids)
 
 
 def check_spec(config, issue, report):
@@ -247,10 +299,27 @@ def check_spec(config, issue, report):
             f"for @{scenario_id}, not {entry!r}",
         )
 
-    report.check(
-        CHANGES_SECTION in spec.sections,
-        f"{name}: no section '{CHANGES_SECTION}'",
-    )
+    report.check(spec.changes, f"{name}: no section '{CHANGES_SECTION}'")
+
+    in_force = behaviour_ids(config)
+    existing_areas = set(in_force.values())
+    for block in spec.blocks:
+        area = block["area"]
+        report.check(
+            area and AREA_NAME.match(area),
+            f"{name}: scenario has no area, or one that is not lowercase words "
+            f"joined by hyphens and slashes: {block['title']} ({area})",
+        )
+    for area in sorted({b["area"] for b in spec.blocks if b["area"]} - existing_areas):
+        if AREA_NAME.match(area):
+            report.warn(f"{name}: creates a new area in the behaviour folder: {area}")
+    built = spec.number in included_specs(config)
+    for scenario_id in sorted(set() if built else spec.retires):
+        report.check(
+            scenario_id in in_force,
+            f"{name}: lists @{scenario_id} as changed, "
+            "but that scenario is not in force",
+        )
 
     if spec.status == "Ready":
         open_items = spec.section("Open items").strip()
@@ -334,7 +403,7 @@ def check_tests(config, issue, base, report):
         )
 
     # Existing tests may be changed or removed only where the specification says so.
-    allowed = set(spec.ids) | spec.ids_named_in(CHANGES_SECTION)
+    allowed = set(spec.ids) | spec.retires
     docs = (config["featuresDir"] + "/", config["adrDir"] + "/")
     for entry in git("diff", "--name-status", "--no-renames", base).splitlines():
         status, path = entry.split("\t", 1)
@@ -469,7 +538,7 @@ def check_state(config, report):
     specs = [Spec(path) for path in spec_paths(config)]
     retired = set()
     for spec in specs:
-        retired |= spec.ids_named_in(CHANGES_SECTION) - set(spec.ids)
+        retired |= spec.retires
 
     for spec in specs:
         name, number = spec.path.name, int(spec.number)
@@ -484,6 +553,12 @@ def check_state(config, report):
                 f"{name}: issue #{number} is closed but the specification is "
                 f"{spec.status}",
             )
+            if spec.ids:
+                report.check(
+                    spec.number in included_specs(config),
+                    f"{name}: issue #{number} is closed but the specification "
+                    f"is not in {config['behaviourDir']}",
+                )
             for scenario_id in spec.automated_ids:
                 report.check(
                     scenario_id in tagged or scenario_id in retired,
@@ -520,6 +595,151 @@ def check_state(config, report):
                 f"{name}: the specification is {spec.status} but "
                 f"{config['featureIndex']} shows something else",
             )
+
+
+def included_specs(config):
+    """Numbers of the specifications the behaviour folder was generated from."""
+    for line in read(Path(config["behaviourDir"]) / "README.md").splitlines():
+        if line.startswith(INCLUDED):
+            return re.findall(r"\d{4}", line[len(INCLUDED) :])
+    return []
+
+
+def generate_behaviour(config, numbers):
+    """The behaviour folder's files, as {path relative to it: text}."""
+    specs = []
+    for number in sorted(set(numbers)):
+        specs.append(Spec(find_spec(config, int(number))))
+    retired, area_of = set(), {}
+    for spec in specs:
+        retired |= spec.retires
+        for block in spec.blocks:
+            if block["id"]:
+                if not block["area"]:
+                    raise CannotRun(
+                        f"{spec.path.name}: @{block['id']} has no area; "
+                        f"run 'spec {int(spec.number)}' first"
+                    )
+                area_of[block["id"]] = block["area"]
+
+    areas, last_changed = {}, {}
+    for spec in specs:
+        for block in spec.blocks:
+            if block["id"] and block["id"] not in retired:
+                areas.setdefault(block["area"], []).append(block)
+            if block["id"]:
+                last_changed[block["area"]] = spec.number
+        for scenario_id in spec.retires:
+            if scenario_id in area_of:
+                last_changed[area_of[scenario_id]] = spec.number
+
+    files = {}
+    rows = []
+    for area in sorted(areas):
+        blocks = sorted(areas[area], key=lambda block: block["id"])
+        lines = [
+            f"# {area}",
+            "",
+            GENERATED,
+            "",
+            "What the system does today in this area. Each scenario carries the ID "
+            "it was given by the specification that introduced it.",
+            "",
+            "```gherkin",
+            f"Feature: {area}",
+        ]
+        for block in blocks:
+            lines += ["", f"  @{block['id']}", f"  {block['body'][0]}"]
+            for step in block["body"][1:]:
+                indent = "      " if step.startswith("|") else "    "
+                lines.append(indent + step)
+        lines += ["```", ""]
+        files[f"{area}.md"] = "\n".join(lines)
+        rows.append(
+            f"| [{area}]({area}.md) | {len(blocks)} | {last_changed[area]} |"
+        )
+
+    files["README.md"] = "\n".join(
+        [
+            "# Behaviour",
+            "",
+            GENERATED,
+            "",
+            "What the system does today, one file for each area. It is generated "
+            "from the specifications that have been built: their scenarios, less "
+            "any that a later specification replaced or removed. The "
+            "specifications themselves hold the history and the reasons.",
+            "",
+            "| Area | Scenarios | Last changed by |",
+            "|------|-----------|-----------------|",
+            *rows,
+            "",
+            f"{INCLUDED} {', '.join(spec.number for spec in specs)}",
+            "",
+        ]
+    )
+    return files
+
+
+def behaviour_ids(config):
+    """Each scenario ID in force, with its area, read from the folder as it stands."""
+    in_force = {}
+    root = Path(config["behaviourDir"])
+    if not root.is_dir():
+        return in_force
+    for path in root.rglob("*.md"):
+        if path.name == "README.md" and path.parent == root:
+            continue
+        area = str(path.relative_to(root))[: -len(".md")]
+        for scenario_id in TAG.findall(path.read_text()):
+            in_force[scenario_id] = area
+    return in_force
+
+
+def check_behaviour(config, report):
+    """The folder holds exactly what its specifications generate."""
+    root = Path(config["behaviourDir"])
+    expected = generate_behaviour(config, included_specs(config))
+    on_disk = (
+        {str(path.relative_to(root)) for path in root.rglob("*.md")}
+        if root.is_dir()
+        else set()
+    )
+    if not on_disk and len(expected) == 1:
+        print(f"no behaviour folder yet at {root}")
+        return
+    for relative, text in sorted(expected.items()):
+        report.check(
+            read(root / relative) == text,
+            f"{root / relative}: differs from what the specifications generate; "
+            "it was edited by hand or is out of date",
+        )
+    for relative in sorted(on_disk - set(expected)):
+        report.check(False, f"{root / relative}: not generated from any specification")
+
+
+def add_to_behaviour(config, issue, report):
+    """Regenerate the folder with one more specification in it."""
+    spec = Spec(find_spec(config, issue))
+    if not spec.ids:
+        raise CannotRun(f"{spec.path.name} has no scenario IDs")
+    root = Path(config["behaviourDir"])
+    files = generate_behaviour(config, included_specs(config) + [spec.number])
+    stale = (
+        {str(path.relative_to(root)) for path in root.rglob("*.md")} - set(files)
+        if root.is_dir()
+        else set()
+    )
+    for relative, text in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if read(path) != text:
+            path.write_text(text)
+            print(f"wrote {path}")
+    for relative in sorted(stale):
+        (root / relative).unlink()
+        print(f"removed {root / relative}")
+    report.check(True, "")
 
 
 def evidence_file(issue):
@@ -628,6 +848,8 @@ def main():
     )
     commands.add_parser("closed")
     commands.add_parser("state")
+    behaviour_parser = commands.add_parser("behaviour")
+    behaviour_parser.add_argument("--add", type=int, metavar="ISSUE")
     for name in ("red", "green"):
         run_parser = commands.add_parser(name)
         run_parser.add_argument("issue", type=int)
@@ -647,6 +869,10 @@ def main():
             check_closed(config, report)
         elif args.command == "state":
             check_state(config, report)
+        elif args.command == "behaviour" and args.add:
+            add_to_behaviour(config, args.add, report)
+        elif args.command == "behaviour":
+            check_behaviour(config, report)
         elif args.command == "red":
             record_red(config, args.issue, args.test_command, report)
         else:

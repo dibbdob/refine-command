@@ -75,7 +75,7 @@ The result is `docs/specs/NNNN-<slug>.md`, marked Ready or Draft, containing:
 - functional and non-functional requirements
 - acceptance criteria in Gherkin: happy paths, sad paths, edge cases, each scenario with a stable ID such as `0042-03` that its test also carries
 - what is out of scope
-- what it changes in earlier specifications
+- what it changes in current behaviour
 - design, with an ADR for each lasting decision
 - external dependencies
 - implementation plan, split into phases if it is too big
@@ -86,7 +86,7 @@ The result is `docs/specs/NNNN-<slug>.md`, marked Ready or Draft, containing:
 Three situations are handled on the way in:
 
 - **A thin issue.** If the issue has no clear narrative, problem or success criteria, the command proposes them in the Intent round. At the finish the issue's description is rewritten with what was agreed, so the issue and the specification say the same thing.
-- **An issue that changes earlier work.** The command reads every earlier specification and ADR, and lists what the new issue changes in them: scenarios it replaces, tests that have to change, lines that no longer hold. If the issue would reverse an earlier decision without saying so, it asks which stands. The earlier specifications themselves are left untouched.
+- **An issue that changes earlier work.** The command reads the behaviour folder for the areas the issue touches, and lists what the new issue changes there: scenarios it replaces or removes, and the tests that have to change. If the issue would reverse an earlier decision without saying so, it asks which stands. The earlier specifications themselves are left untouched.
 - **An unfinished specification.** If a Draft already exists for the issue, running the command again asks only about its open items. Running it on a Ready specification asks whether you want to revise it, as long as its issue is still open; once the issue is closed, a change starts with a new issue.
 
 ### Thorough mode
@@ -104,18 +104,44 @@ The default, lean mode, suits one person or a small team. When several people ar
 
 It builds nothing beyond the specification, never changes a test to get a green run, and never edits the specification. If the specification turns out to be wrong or impossible, it stops and sends you back to `/backlog:refine`.
 
+## Current behaviour
+
+The numbered specifications are a history: each says what one issue changed and why, and is never edited once its issue is closed. On their own they do not say what the system does now; for that you would have to read them all in order.
+
+So the plugin keeps a second set of documents that does:
+
+```
+docs/
+  specs/         history: one specification per issue
+  decisions/     ADRs
+  behaviour/     the present: what the system does today
+    README.md    the areas, how many scenarios each holds, which specification last changed it
+    vat/
+      line-vat.md
+      invoice-totals.md
+```
+
+- **One file for each area of behaviour**, holding the scenarios in force. Each scenario names its area with a tag in its specification, such as `@area:vat/line-vat`.
+- **Generated, never written.** A script builds the folder from the specifications that have been built: all their scenarios, less any that a later specification lists as replaced or removed. Nobody edits it, and a check fails if anyone has.
+- **Updated by implement, when the tests pass.** A specification that is Ready but not built describes what will be true, so it is not there yet.
+- **Read by refine.** It reads the index and only the areas an issue touches, so a refinement costs the same in a system of forty specifications as in one of four.
+
+A project whose earlier specifications were written before scenarios had IDs will find the folder empty at first. Those specifications cannot be edited to add them. To bring that behaviour in, raise an issue to record the baseline: its specification restates the scenarios in force with IDs and areas, changes nothing, and its implementation is tagging the existing tests.
+
 ## What is checked by script
 
 Some promises of the process are too important to rest on careful reading, so a script checks them and the commands stop when it fails. It is `scripts/backlog_check.py` in this plugin, and it can be run by hand or in CI from the project root.
 
 | Command | Run by | Fails when |
 |---|---|---|
-| `spec <issue>` | refine, before the review and again when setting Ready; implement, before building | a scenario has no ID, an ID is malformed or used twice, a requirement is cited by no scenario, a scenario is missing from the testing strategy, a link does not resolve, or a Ready specification has open items |
+| `spec <issue>` | refine, before the review and again when setting Ready; implement, before building | a scenario has no ID, an ID is malformed or used twice, a requirement is cited by no scenario, a scenario is missing from the testing strategy, a scenario has no area, a scenario listed as changed is not in force, a link does not resolve, or a Ready specification has open items. Warns when a specification creates a new area |
 | `tests <issue>` | implement, after the suite passes | a scenario has no test carrying its ID, a test carries an ID no specification defines, or the test for any other scenario was changed or removed without the specification listing it |
 | `closed` | both, before anything is committed | a specification or ADR belonging to a closed issue was edited after the issue closed |
 | `red <issue> -- <test command>` | implement, after writing the tests and before any code | a scenario has no test yet, or the suite already passes |
 | `green <issue> -- <test command>` | implement, after the code | the suite fails, or no failing run was recorded first. Warns when a test was edited after it was seen to fail |
-| `state` | both, after the finish | a specification's status disagrees with its issue's label, its issue's text or the feature index; or an issue is closed while its specification is a Draft or one of its scenarios has no test |
+| `behaviour` | implement, before building | a file in the behaviour folder differs from what the specifications generate, or was not generated at all |
+| `behaviour --add <issue>` | implement, after the suite and the other checks pass | never; it regenerates the folder with that specification included |
+| `state` | both, after the finish | a specification's status disagrees with its issue's label, its issue's text or the feature index; or an issue is closed while its specification is a Draft, is missing from the behaviour folder, or has a scenario with no test |
 
 The second row is the guard against bending a test to get a green run. `red` and `green` are the evidence that the tests came first; the record of the failing run is kept inside `.git`, not in your project's files. Test code written before scenarios had IDs cannot be tied to a specification, so a change to it is reported as a warning for a person to look at, not as a failure.
 
@@ -202,7 +228,8 @@ If the project already has a feature template, a Definition of Ready or an ADR t
     "definitionOfReady": "docs/specs/READY.md",
     "adrDir": "docs/decisions",
     "adrTemplate": "docs/decisions/TEMPLATE.md",
-    "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md"
+    "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md",
+    "behaviourDir": "docs/behaviour"
   },
   "process": {
     "mode": "lean",
@@ -227,6 +254,7 @@ If the project already has a feature template, a Definition of Ready or an ADR t
 |---|---|
 | `repo` | GitHub repository that holds the issues, as `owner/name`. Used for every `gh` call, so the git remotes of the checkout do not matter. |
 | `paths.*` | Where the documents live and where new ones are written, relative to the project root. |
+| `paths.behaviourDir` | Where the description of current behaviour is generated. See [Current behaviour](#current-behaviour). |
 | `process.mode` | `lean` (default) or `thorough`. See [Thorough mode](#thorough-mode). |
 | `process.deliveryBudget` | The largest a single feature may be. Anything bigger is split into phases. |
 | `finalise.commit` | Commit the specification at the end of the session. |
@@ -245,7 +273,7 @@ Even with these switched on, nothing leaves your working copy without a yes. At 
 The command is deliberately opinionated. These are not configurable:
 
 - One feature specification per GitHub issue, numbered by the issue.
-- Closed work is a record. A specification whose issue is closed is never edited, and neither are its ADRs or the issue. A later issue that changes it says so in its own specification, under Changes to earlier specifications, and the feature index shows which specifications it amends.
+- Closed work is a record. A specification whose issue is closed is never edited, and neither are its ADRs or the issue. A later issue that changes it says so in its own specification, under Changes to current behaviour.
 - The command drafts; you review. In lean mode it applies its defaults and lists them, instead of asking.
 - Narrative, problem and lasting design decisions are never assumed.
 - Acceptance criteria are written in Gherkin, with concrete values, one scenario per test.
