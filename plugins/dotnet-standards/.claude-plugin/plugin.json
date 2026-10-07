@@ -1,0 +1,6 @@
+{
+  "name": "dotnet-standards",
+  "description": "C# and .NET engineering standards for a project that uses the backlog plugin: rules the refine and implement commands follow, and the skills that explain them",
+  "version": "0.1.0",
+  "author": { "name": "Jan Wilson" }
+}

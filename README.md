@@ -133,6 +133,20 @@ docs/standards/
 
 To start, write the files by hand, or ask Claude to propose standards from the code you already have and approve the ones you agree with.
 
+### Standards for a stack
+
+A companion plugin can supply the standards for one stack, so a project does not start from nothing. This marketplace holds one, [dotnet-standards](plugins/dotnet-standards), for C# and .NET:
+
+```bash
+claude plugin install dotnet-standards@refine-command
+```
+
+```
+/dotnet-standards:setup
+```
+
+Setup copies the topics that fit into `docs/standards`, narrowed to where your code sits, and offers checks for `implement.verify`. Each topic names a skill that holds its detail, loaded only when that topic applies. The copied files are then yours to edit.
+
 ## Current behaviour
 
 The numbered specifications are a history: each says what one issue changed and why, and is never edited once its issue is closed. On their own they do not say what the system does now; for that you would have to read them all in order.
@@ -377,3 +391,5 @@ tests/test_backlog_check.py       tests for the checker
 ## Licence
 
 [MIT](LICENSE)
+
+The skills in `plugins/dotnet-standards/skills` are third-party content under their own MIT licence; see [THIRD-PARTY.md](plugins/dotnet-standards/THIRD-PARTY.md).

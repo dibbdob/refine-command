@@ -7,6 +7,11 @@
       "name": "backlog",
       "source": "./",
       "description": "Take a GitHub issue from a rough idea to working, tested code: refine it into a specification a team can build from, then implement it test-first"
+    },
+    {
+      "name": "dotnet-standards",
+      "source": "./plugins/dotnet-standards",
+      "description": "C# and .NET engineering standards for a project that uses the backlog plugin: rules the refine and implement commands follow, and the skills that explain them"
     }
   ]
 }
