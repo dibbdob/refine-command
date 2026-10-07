@@ -3,7 +3,7 @@
 A Claude Code command that turns a GitHub issue into a feature specification a team can build from. You give it an issue number; it drafts the specification, asks you only what it cannot work out, and checks the result against your Definition of Ready.
 
 ```
-/refine 42
+/backlog:refine 42
 ```
 
 It works in a new project with nothing set up, and in an existing project that already has its own templates.
@@ -12,13 +12,17 @@ It works in a new project with nothing set up, and in an existing project that a
 
 You need [Claude Code](https://claude.com/claude-code) and the [GitHub CLI](https://cli.github.com), signed in.
 
-1. From the root of your project, copy the command in:
+1. Install the plugin:
 
    ```bash
-   mkdir -p .claude/commands && curl -fsSL https://raw.githubusercontent.com/dibbdob/refine-command/main/commands/refine.md -o .claude/commands/refine.md
+   claude plugin marketplace add dibbdob/refine-command
    ```
 
-2. Start Claude Code in the project and run `/refine` with an issue number.
+   ```bash
+   claude plugin install backlog@refine-command
+   ```
+
+2. Start a new Claude Code session in your project and run `/backlog:refine` with an issue number.
 3. Answer a handful of questions, read the list of assumptions it made, and say yes to the finish.
 
 There is no configuration to write. On the first run the command finds your repository and creates the templates it needs. Everything below is reference.
@@ -64,29 +68,7 @@ The default, lean mode, suits one person or a small team. When several people ar
 
 ## Install
 
-There are two ways to get the command. Pick one.
-
-| | Copy the command | Install the plugin |
-|---|---|---|
-| Lives in | the project's `.claude/commands/` | your Claude Code install |
-| Available in | that project, for everyone who clones it | every project on your machine |
-| Invoked as | `/refine 42` | `/backlog:refine 42` |
-| Updates | copy the file again | `claude plugin update` |
-| Can be edited per project | yes | no |
-
-### Option 1: copy the command into a project
-
-Run this from the root of the project:
-
-```bash
-mkdir -p .claude/commands && curl -fsSL https://raw.githubusercontent.com/dibbdob/refine-command/main/commands/refine.md -o .claude/commands/refine.md
-```
-
-Commit `.claude/commands/refine.md` so the rest of the team gets it. Start a new Claude Code session and run `/refine <issue-number>`.
-
-The command is a single file with no other dependencies, so copying it by hand from [commands/refine.md](commands/refine.md) works just as well.
-
-### Option 2: install as a plugin
+The command is installed as a Claude Code plugin called `backlog`. It is then available in every project on your machine as `/backlog:refine`; the prefix is the plugin's name, and keeps the command from colliding with a `/refine` a project already has.
 
 Add this repository as a marketplace:
 
@@ -100,7 +82,9 @@ Install the plugin from it:
 claude plugin install backlog@refine-command
 ```
 
-Start a new Claude Code session and run `/backlog:refine <issue-number>`. Plugin commands carry the plugin's name as a prefix, which keeps this one from colliding with a `/refine` a project already has.
+Start a new Claude Code session and run `/backlog:refine <issue-number>`.
+
+Do not also copy `commands/refine.md` into a project's `.claude/commands/`. That gives the project a second command, `/refine`, which does the same thing from a file that never updates.
 
 To have a project suggest the plugin to everyone who opens it, add this to the project's `.claude/settings.json`:
 
@@ -198,13 +182,11 @@ The command is deliberately opinionated. These are not configurable:
 - A feature is not Ready until every item of the Definition of Ready is met.
 - Features are kept small; a feature over the delivery budget is split into phases.
 
-If one of these does not suit a project, use Option 1 and edit the project's copy.
+If one of these does not suit you, fork this repository, edit `commands/refine.md`, and install the plugin from your fork.
 
 ## Updating and removing
 
-**Copied command:** run the install line again to update, or delete `.claude/commands/refine.md` to remove it.
-
-**Plugin:** update with
+Update with
 
 ```bash
 claude plugin update backlog@refine-command
