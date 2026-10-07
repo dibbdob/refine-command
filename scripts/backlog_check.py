@@ -7,6 +7,8 @@
     backlog_check.py state            issues, specifications and the index agree
     backlog_check.py behaviour        the behaviour folder is what the specifications generate
     backlog_check.py behaviour --add <issue>   bring a built specification into it
+    backlog_check.py standards        list the project's standards and what each applies to
+    backlog_check.py verify           run the project's own checks on the files that changed
     backlog_check.py red <issue> -- <test command>     record the new tests failing
     backlog_check.py green <issue> -- <test command>   the suite passes, after a red
 
@@ -29,6 +31,8 @@ GENERATED = "<!-- Generated from the specifications by the backlog plugin. Do no
 INCLUDED = "Specifications included:"
 AUTO_ACCEPTED = "Accepted under the auto-accept policy"
 SETTLED = "Settled by convention"
+STANDARD = re.compile(r"\bS-[A-Z][A-Z0-9]*-\d+\b")
+APPLIES = re.compile(r"^Applies to:\s*(.+)$", re.MULTILINE)
 STATUSES = ("Draft", "Ready")
 
 # A scenario ID is the specification's number and a sequence: 0042-03.
@@ -100,6 +104,8 @@ def load_config():
         "featureIndex": paths.get("featureIndex", "docs/specs/README.md"),
         "behaviourDir": paths.get("behaviourDir", "docs/behaviour").rstrip("/"),
         "conventions": paths.get("conventions", "docs/specs/CONVENTIONS.md"),
+        "standardsDir": paths.get("standardsDir", "docs/standards").rstrip("/"),
+        "verify": config.get("implement", {}).get("verify", []),
         "autoAccept": bool(config.get("process", {}).get("autoAccept", False)),
         "readyLabel": config.get("finalise", {}).get("readyLabel", "ready"),
         "testPaths": config.get("implement", {}).get("testPaths"),
@@ -331,6 +337,12 @@ def check_spec(config, issue, report):
         report.check(
             convention in agreed,
             f"{name}: cites {convention}, which is not in {config['conventions']}",
+        )
+    known_standards = {rule for topic in standards(config) for rule in topic["rules"]}
+    for rule in sorted(set(STANDARD.findall(spec.text))):
+        report.check(
+            rule in known_standards,
+            f"{name}: cites {rule}, which is not in {config['standardsDir']}",
         )
     if AUTO_ACCEPTED in assumptions:
         # Nobody reviewed this specification, so it must have left nothing to review.
@@ -785,6 +797,112 @@ def add_to_behaviour(config, issue, report):
     report.check(True, "")
 
 
+def standards(config):
+    """Each topic in the standards folder: its file, what it applies to, its rules."""
+    root = Path(config["standardsDir"])
+    topics = []
+    if not root.is_dir():
+        return topics
+    for path in sorted(root.rglob("*.md")):
+        if path.name == "README.md":
+            continue
+        text = path.read_text()
+        applies = APPLIES.search(text)
+        topics.append(
+            {
+                "path": str(path),
+                "applies": applies.group(1).strip() if applies else None,
+                "rules": re.findall(
+                    r"^\|\s*(S-[A-Z][A-Z0-9]*-\d+)\s*\|", text, re.MULTILINE
+                ),
+            }
+        )
+    return topics
+
+
+def globs_in(text):
+    """The path patterns written in backticks in an 'Applies to' line."""
+    return re.findall(r"`([^`]+)`", text or "")
+
+
+def glob_regex(pattern):
+    """A path pattern as a regular expression: ** crosses folders, * does not."""
+    out, i = "", 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out, i = out + "(?:.*/)?", i + 3
+        elif pattern.startswith("**", i):
+            out, i = out + ".*", i + 2
+        elif pattern[i] == "*":
+            out, i = out + "[^/]*", i + 1
+        elif pattern[i] == "?":
+            out, i = out + "[^/]", i + 1
+        else:
+            out, i = out + re.escape(pattern[i]), i + 1
+    return re.compile(out + r"\Z")
+
+
+def matches(path, patterns):
+    return any(glob_regex(pattern).match(path) for pattern in patterns)
+
+
+def changed_files(base):
+    tracked = git("diff", "--name-only", "--no-renames", base).splitlines()
+    untracked = git("ls-files", "-o", "--exclude-standard").splitlines()
+    return sorted(set(tracked + untracked))
+
+
+def check_standards(config, report):
+    """List the standards, and check each topic is usable."""
+    topics = standards(config)
+    if not topics:
+        print(f"no standards yet in {config['standardsDir']}")
+        return
+    seen = {}
+    for topic in topics:
+        print(f"{topic['path']}  applies to: {topic['applies']}  rules: {len(topic['rules'])}")
+        report.check(
+            topic["applies"],
+            f"{topic['path']}: no 'Applies to:' line saying what it covers",
+        )
+        for rule in topic["rules"]:
+            report.check(
+                rule not in seen,
+                f"{topic['path']}: {rule} is also in {seen.get(rule)}",
+            )
+            seen[rule] = topic["path"]
+
+
+def run_verify(config, base, report):
+    """Run the project's own checks that apply to the files changed since base."""
+    entries = config["verify"]
+    if not entries:
+        print("no checks configured under implement.verify")
+        return
+    files = changed_files(base)
+    for entry in entries:
+        command = entry if isinstance(entry, str) else entry.get("run")
+        when = [] if isinstance(entry, str) else entry.get("when", [])
+        if not command:
+            raise CannotRun(f"implement.verify entry has no command: {entry!r}")
+        if when and not any(matches(path, when) for path in files):
+            print(f"skipped (no changed file matches {', '.join(when)}): {command}")
+            continue
+        print(f"running: {command}", flush=True)
+        status = subprocess.run(command, shell=True).returncode
+        report.check(status == 0, f"'{command}' failed with exit status {status}")
+
+    # Say which standards cover the changed files, so none is overlooked.
+    for topic in standards(config):
+        patterns = globs_in(topic["applies"])
+        touched = [path for path in files if matches(path, patterns)]
+        if touched:
+            print(
+                f"standards that apply to {len(touched)} changed file(s): "
+                f"{topic['path']}"
+            )
+
+
 def evidence_file(issue):
     return Path(git("rev-parse", "--git-dir").strip()) / "backlog" / f"{issue:04d}.json"
 
@@ -925,6 +1043,11 @@ def main():
     )
     commands.add_parser("closed")
     commands.add_parser("state")
+    commands.add_parser("standards")
+    verify_parser = commands.add_parser("verify")
+    verify_parser.add_argument(
+        "--base", default="HEAD", help="commit the work started from"
+    )
     behaviour_parser = commands.add_parser("behaviour")
     behaviour_parser.add_argument("--add", type=int, metavar="ISSUE")
     for name in ("red", "green"):
@@ -946,6 +1069,10 @@ def main():
             check_closed(config, report)
         elif args.command == "state":
             check_state(config, report)
+        elif args.command == "standards":
+            check_standards(config, report)
+        elif args.command == "verify":
+            run_verify(config, args.base, report)
         elif args.command == "behaviour" and args.add:
             add_to_behaviour(config, args.add, report)
         elif args.command == "behaviour":

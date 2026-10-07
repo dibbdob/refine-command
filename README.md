@@ -114,6 +114,25 @@ Refine stops for the team at the review because its assumptions are where a wron
 
 Anything novel still stops for you. That is the point: the stop is spent where judgement is needed.
 
+## Standards
+
+Naming, data access, locking, styling: every project has rules for how it is built, and they depend on its stack. The plugin ships none. It gives them a place to live, makes both commands follow them, and runs your own tools to enforce them.
+
+```
+docs/standards/
+  database.md     Applies to: `src/**/*.py`
+  css.md          Applies to: `web/**/*.css`
+```
+
+- **One file per topic.** Each says which paths it applies to and lists its rules, numbered like S-DB-1, with a link to the decision record behind each where there is one.
+- **Scoped to paths, so several stacks can share a repository.** The CSS rules apply to the frontend, the locking rules to the backend, and neither is read when the other is being changed.
+- **Refine follows them and cites them.** A specification's design ends with the rules it relied on. A rule settles its question, so it is neither asked nor assumed. An issue that cannot be met without breaking one becomes a question for you.
+- **Refine offers new ones.** When a session makes a lasting technical choice, it offers it as a rule for everything after. You choose; it never adds one unasked.
+- **Implement enforces what a tool can.** List your linter, type checker or architecture tests under `implement.verify`, each optionally tied to paths. Implement runs the ones that apply to the files it changed, and a failure blocks the finish as a failing test does.
+- **The rest relies on the specification.** A rule no tool can check, such as when to take a lock, is followed because the specification names it and implement reads it.
+
+To start, write the files by hand, or ask Claude to propose standards from the code you already have and approve the ones you agree with.
+
 ## Current behaviour
 
 The numbered specifications are a history: each says what one issue changed and why, and is never edited once its issue is closed. On their own they do not say what the system does now; for that you would have to read them all in order.
@@ -144,13 +163,15 @@ Some promises of the process are too important to rest on careful reading, so a 
 
 | Command | Run by | Fails when |
 |---|---|---|
-| `spec <issue>` | refine, before the review and again when setting Ready; implement, before building | a scenario has no ID, an ID is malformed or used twice, a requirement is cited by no scenario, a scenario is missing from the testing strategy, a scenario has no area, a scenario listed as changed is not in force, a link does not resolve, a convention it cites does not exist, a Ready specification has open items, or it is marked auto-accepted without meeting the conditions. Warns when a specification creates a new area |
+| `spec <issue>` | refine, before the review and again when setting Ready; implement, before building | a scenario has no ID, an ID is malformed or used twice, a requirement is cited by no scenario, a scenario is missing from the testing strategy, a scenario has no area, a scenario listed as changed is not in force, a link does not resolve, a convention or standard it cites does not exist, a Ready specification has open items, or it is marked auto-accepted without meeting the conditions. Warns when a specification creates a new area |
 | `tests <issue>` | implement, after the suite passes | a scenario has no test carrying its ID, a test carries an ID no specification defines, or the test for any other scenario was changed or removed without the specification listing it |
 | `closed` | both, before anything is committed | a specification or ADR belonging to a closed issue was edited after the issue closed |
 | `red <issue> -- <test command>` | implement, after writing the tests and before any code | a scenario has no test yet, or the suite already passes. A passing suite is accepted only for a baseline, where scenario IDs on existing tests are the only change |
 | `green <issue> -- <test command>` | implement, after the code | the suite fails, or no failing run was recorded first. Warns when a test was edited after it was seen to fail |
 | `behaviour` | implement, before building | a file in the behaviour folder differs from what the specifications generate, or was not generated at all |
 | `behaviour --add <issue>` | implement, after the suite and the other checks pass | never; it regenerates the folder with that specification included |
+| `standards` | refine, to choose what to read | a topic does not say what it applies to, or a rule number is used twice |
+| `verify` | implement, after the suite passes | one of the project's own checks that applies to the changed files fails |
 | `state` | both, after the finish | a specification's status disagrees with its issue's label, its issue's text or the feature index; or an issue is closed while its specification is a Draft, is missing from the behaviour folder, or has a scenario with no test |
 
 The second row is the guard against bending a test to get a green run. `red` and `green` are the evidence that the tests came first; the record of the failing run is kept inside `.git`, not in your project's files. Test code written before scenarios had IDs cannot be tied to a specification, so a change to it is reported as a warning for a person to look at, not as a failure.
@@ -241,7 +262,8 @@ If the project already has a feature template, a Definition of Ready or an ADR t
     "adrTemplate": "docs/decisions/TEMPLATE.md",
     "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md",
     "behaviourDir": "docs/behaviour",
-    "conventions": "docs/specs/CONVENTIONS.md"
+    "conventions": "docs/specs/CONVENTIONS.md",
+    "standardsDir": "docs/standards"
   },
   "process": {
     "mode": "lean",
@@ -258,7 +280,8 @@ If the project already has a feature template, a Definition of Ready or an ADR t
     "commit": true,
     "commitMessage": "#{issue} Implement: {title}",
     "closeIssue": true,
-    "testPaths": []
+    "testPaths": [],
+    "verify": []
   }
 }
 ```
@@ -269,6 +292,7 @@ If the project already has a feature template, a Definition of Ready or an ADR t
 | `paths.*` | Where the documents live and where new ones are written, relative to the project root. |
 | `paths.behaviourDir` | Where the description of current behaviour is generated. See [Current behaviour](#current-behaviour). |
 | `paths.conventions` | General rules the team has agreed once. See [Fewer stops](#fewer-stops). |
+| `paths.standardsDir` | The project's engineering standards, one file per topic. See [Standards](#standards). |
 | `process.autoAccept` | Let a specification that left nothing to review become Ready without waiting. Off by default. See [Fewer stops](#fewer-stops). |
 | `process.mode` | `lean` (default) or `thorough`. See [Thorough mode](#thorough-mode). |
 | `process.deliveryBudget` | The largest a single feature may be. Anything bigger is split into phases. |
@@ -279,6 +303,7 @@ If the project already has a feature template, a Definition of Ready or an ADR t
 | `implement.commit` | Commit the feature when `/backlog:implement` has built and verified it. |
 | `implement.commitMessage` | Commit message. `{issue}` and `{title}` are filled in. |
 | `implement.closeIssue` | Close the issue as completed once every phase of the specification is built. |
+| `implement.verify` | The project's own checks, such as a linter or type checker: each a command, or a command with the paths it is for. Run by implement; a failure blocks the finish. See [Standards](#standards). |
 | `implement.testPaths` | Glob patterns naming the project's test files, for the checker. Empty means the common conventions: `tests/`, `test_*`, `*.test.*`, `*_test.*`, `spec/`. |
 
 Even with these switched on, nothing leaves your working copy without a yes. At the finish the command shows one list of what it is about to commit, push, write to the issue and label, with the exact text, and you can strike any line.

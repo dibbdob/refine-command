@@ -30,7 +30,8 @@ Everything specific to the project comes from `.claude/refine.json` at the proje
     "adrTemplate": "docs/decisions/TEMPLATE.md",
     "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md",
     "behaviourDir": "docs/behaviour",
-    "conventions": "docs/specs/CONVENTIONS.md"
+    "conventions": "docs/specs/CONVENTIONS.md",
+    "standardsDir": "docs/standards"
   },
   "process": {
     "mode": "lean",
@@ -50,6 +51,7 @@ Everything specific to the project comes from `.claude/refine.json` at the proje
 - `paths` are relative to the project root. Set `paths.issueTemplate` to `""` to do without an issue template.
 - `paths.behaviourDir` holds what the system does today, generated from the specifications that have been built. See [Current behaviour](#current-behaviour). This command reads it and never writes it.
 - `paths.conventions` lists what the team has agreed once for every feature. See [Conventions](#conventions).
+- `paths.standardsDir` holds the project's engineering standards, one file for each topic. See [Standards](#standards).
 - `process.autoAccept`, when true, lets a specification that left nothing to review become Ready without waiting for the team. See [Auto-accept](#auto-accept).
 - `process.mode` is `lean` or `thorough`; see [Thorough mode](#thorough-mode).
 - `process.deliveryBudget` is the largest a single feature may be.
@@ -83,9 +85,33 @@ Never overwrite or reformat a document the project already has. The project's ow
 - **Only the team adds one.** After the team has accepted the assumptions in the review, look for any that are general in this sense and would recur. Offer them, reworded as rules, for the team to choose from. Append those chosen to the table in `paths.conventions` with the next free number and today's date. Never add one unasked, and never as part of an auto-accepted specification.
 - **An issue that goes against a convention** is a contradiction for the Intent round: show both and ask which stands. If the convention is to change, edit the file; it is a living document, not closed work.
 
+## Standards
+
+`paths.standardsDir` holds the rules for how this project is built: naming, data access, locking, styling and the like. They are the project's own and depend on its stack, so this command supplies none; it reads them, follows them, and helps the team add to them.
+
+Each topic is one file. It says what it applies to and lists its rules in a table, each with a number such as S-DB-2 and, where there is one, a link to the ADR that explains it:
+
+````markdown
+# Database
+
+Applies to: `src/**/*.py`
+
+| No. | Rule | Why |
+|-----|------|-----|
+| S-DB-1 | All access to the database goes through a repository class. | [ADR 0007](../decisions/0007-repositories.md) |
+````
+
+"Applies to" names the paths the topic covers, as patterns in backticks, so that a project with more than one stack can keep each stack's rules to its own files.
+
+- **Read only what applies.** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/backlog_check.py" standards` from the project root to list the topics and what each applies to. Open the ones that cover the code this issue will touch, and no others.
+- **Follow them without asking.** A standard settles its question, so what it decides is neither an Intent question nor an assumption. End the Design section with one line naming those the design relies on: `Standards applied: S-DB-1, S-NAME-3.` The checker fails a specification that cites a rule that does not exist.
+- **Where there is none, follow the code.** With no standard on a point, design to match what the project already does, and list that as an assumption.
+- **A departure is the team's call.** If the issue cannot be met without breaking a standard, that is a contradiction for the Intent round: show the rule and the need, and ask which stands. If the rule is to change, the file is edited; it is a living document.
+- **Only the team adds one.** A lasting technical choice made in this session, once recorded as an ADR, often amounts to a rule for everything after. After the team has accepted the draft, offer any such rule for the standards, worded generally, with the topic and the paths it would apply to. Add those chosen to the topic's file with the next free number, creating the file if the topic is new. Never add one unasked.
+
 ## Before the Intent round
 
-1. Read the issue, the feature template, the Definition of Ready, the feature index, the conventions and the project's `CLAUDE.md` if there is one.
+1. Read the issue, the feature template, the Definition of Ready, the feature index, the conventions, the standards that apply and the project's `CLAUDE.md` if there is one.
 2. Look in `paths.featuresDir` for a specification that already exists for this issue: a file whose name starts with the issue number padded to four digits. If there is one, see [Resuming](#resuming).
 3. Look at the project itself: what it is built with, how it is tested, how it is laid out. The design and the testing strategy follow what is already there.
 4. Run whatever checks the issue calls for.
@@ -151,7 +177,7 @@ Write the complete specification to `paths.featuresDir`, in a file named with th
 | Acceptance criteria | Gherkin scenarios with concrete values, one scenario per test, each with an ID (see [Scenario IDs](#scenario-ids)) and an area (see [Areas](#areas)) | A happy path for every functional requirement, a sad path for every invalid input and every failure the issue names, and an edge case at every boundary |
 | Out of scope | What is deliberately not built | Anything not needed for the success criteria, including anything the team was offered in the Intent round and did not choose. Name the nearest things someone might expect to be included |
 | Changes to current behaviour | Each scenario in force that this one replaces or removes, by ID, and any new area it creates | Found by reading the behaviour folder, not asked. "None." when there is nothing |
-| Design | Interfaces, data, visuals, as far as they apply | The simplest design that satisfies the scenarios, using what the project already uses. No new dependency where an existing one will do |
+| Design | Interfaces, data, visuals, as far as they apply, and the standards relied on | The simplest design that satisfies the scenarios and follows the project's standards, using what the project already uses. No new dependency where an existing one will do |
 | External dependencies | Each with whether it is available now | Checked, not asked |
 | Implementation plan | Ordered, concrete steps | The first step is to turn each scenario into a failing automated test, where the project has a test setup. No tests are written during refinement. Assume it fits `process.deliveryBudget` when it is a handful of steps in one area. Otherwise propose phases |
 | Testing strategy | How each scenario and each non-functional requirement is verified | Automated with the project's existing test setup. A scenario that cannot be automated gets a written manual procedure with the exact commands. If the project has no test setup, every scenario gets one; do not add a test framework unless the issue asks for it. Never plan a test that breaks the default branch or a live system |
@@ -212,7 +238,7 @@ Set the status to **Ready** when every Definition of Ready item is met, and othe
 
 Add or update the feature's entry in `paths.featureIndex`. Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/backlog_check.py" closed` and, if it fails, stop and show what it found: something belonging to a closed issue has been edited and has to be put back first. Then show the team, as one numbered list, everything that is about to leave the working copy, with the exact text of anything that will be written to GitHub. Present it as what will happen and ask for a single yes. The team can strike a line by saying so; a line is never skipped just because nobody mentioned it.
 
-1. **Commit**, if `finalise.commit` is true: the specification, any ADRs, the feature index, the conventions if any were added, and any first-run files not yet committed. Message from `finalise.commitMessage`, with `{issue}` and `{title}` filled in.
+1. **Commit**, if `finalise.commit` is true: the specification, any ADRs, the feature index, the conventions and standards if any were added, and any first-run files not yet committed. Message from `finalise.commitMessage`, with `{issue}` and `{title}` filled in.
 2. **Push** of the current branch, so that links to the specification resolve.
 3. **Issue**, if `finalise.updateIssue` is true: rewrite the issue's description as a summary of what was agreed, in the form below.
 4. **Label**, if `finalise.readyLabel` is not empty: added when Ready, removed when a Ready specification has gone back to Draft, and created in `repo` if it does not exist.
