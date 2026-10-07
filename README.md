@@ -15,7 +15,7 @@ You need [Claude Code](https://claude.com/claude-code) and the [GitHub CLI](http
 1. From the root of your project, copy the command in:
 
    ```bash
-   mkdir -p .claude/commands && gh api repos/dibbdob/refine-command/contents/commands/refine.md -H "Accept: application/vnd.github.raw" > .claude/commands/refine.md
+   mkdir -p .claude/commands && curl -fsSL https://raw.githubusercontent.com/dibbdob/refine-command/main/commands/refine.md -o .claude/commands/refine.md
    ```
 
 2. Start Claude Code in the project and run `/refine` with an issue number.
@@ -78,7 +78,7 @@ There are two ways to get the command. Pick one.
 Run this from the root of the project:
 
 ```bash
-mkdir -p .claude/commands && gh api repos/dibbdob/refine-command/contents/commands/refine.md -H "Accept: application/vnd.github.raw" > .claude/commands/refine.md
+mkdir -p .claude/commands && curl -fsSL https://raw.githubusercontent.com/dibbdob/refine-command/main/commands/refine.md -o .claude/commands/refine.md
 ```
 
 Commit `.claude/commands/refine.md` so the rest of the team gets it. Start a new Claude Code session and run `/refine <issue-number>`.
