@@ -1,8 +1,8 @@
 # dotnet-standards
 
-C# and .NET engineering standards for a project that uses the [backlog](https://github.com/dibbdob/refine-command) plugin.
+C# and .NET engineering standards for a project whose features are specified and built by an agent, with either the [backlog](https://github.com/dibbdob/refine-command) plugin or OpenSpec through the [openspec-issues](https://github.com/dibbdob/openspec-issues) plugin.
 
-The backlog plugin supplies a process and no opinion on any stack. This plugin supplies the opinion for one stack, in the form that process reads.
+Both supply a process and no opinion on any stack. This plugin supplies the opinion for one stack, in the form both read: one file for each topic in `docs/standards`.
 
 ## What it holds
 
@@ -24,7 +24,11 @@ The backlog plugin supplies a process and no opinion on any stack. This plugin s
 
 ## How it joins the backlog plugin
 
-1. `/dotnet-standards:setup` copies the topics that fit into the project's `docs/standards`, with each topic's paths narrowed to the solution, and offers the build, format and vulnerability checks for `implement.verify`.
+With OpenSpec the same files are read through the project context that `/issue:setup` adds: the standards covering the files a change touches are read, the skills they name are loaded, and the design ends with the rules it relied on. OpenSpec has nowhere to register the checks, so setup lists the ones that pass for the project's CI.
+
+With backlog:
+
+1. `/dotnet-standards:setup` copies the topics that fit into the project's `docs/standards`, with each topic's paths narrowed to the solution, says which rules contradict what the project does on purpose, and offers the build, format and vulnerability checks that pass today for `implement.verify`.
 2. `/backlog:refine` lists the topics that cover the code an issue touches, reads them, designs to them and cites the rules it relied on, such as `Standards applied: S-CS-4, S-DI-1.`
 3. Each topic tells the reader to load its skill first, so the detail is read only when that topic applies. Four of them also send questions the rules and skill leave open to the Microsoft Learn connector, so they are answered from the documentation and not from memory.
 4. `/backlog:implement` runs the checks and names every topic that covers a changed file.

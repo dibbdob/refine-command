@@ -11,7 +11,7 @@
     {
       "name": "dotnet-standards",
       "source": "./plugins/dotnet-standards",
-      "description": "C# and .NET engineering standards for a project that uses the backlog plugin: rules the refine and implement commands follow, and the skills that explain them"
+      "description": "C# and .NET engineering standards for a project that uses the backlog plugin or OpenSpec: numbered rules that specifying and building follow, and the skills that explain them"
     }
   ]
 }
