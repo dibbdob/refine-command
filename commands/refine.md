@@ -28,7 +28,8 @@ Everything specific to the project comes from `.claude/refine.json` at the proje
     "definitionOfReady": "docs/specs/READY.md",
     "adrDir": "docs/decisions",
     "adrTemplate": "docs/decisions/TEMPLATE.md",
-    "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md"
+    "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md",
+    "issueDraft": "issue.md"
   },
   "process": {
     "mode": "lean",
@@ -45,6 +46,7 @@ Everything specific to the project comes from `.claude/refine.json` at the proje
 
 - `repo` is the GitHub repository that holds the issues, as `owner/name`. Pass it to every `gh` call with `--repo`.
 - `paths` are relative to the project root. Set `paths.issueTemplate` to `""` to do without an issue template.
+- `paths.issueDraft` is where the issue's text may be lying around as a local file, left over from writing the issue. See [The issue draft](#the-issue-draft). Set it to `""` to leave such a file alone.
 - `process.mode` is `lean` or `thorough`; see [Thorough mode](#thorough-mode).
 - `process.deliveryBudget` is the largest a single feature may be.
 - `finalise` controls the finish. Set `finalise.readyLabel` to `""` to leave issue labels alone.
@@ -74,6 +76,17 @@ Never overwrite or reformat a document the project already has. The project's ow
 2. Look in `paths.featuresDir` for a specification that already exists for this issue: a file whose name starts with the issue number padded to four digits. If there is one, see [Resuming](#resuming).
 3. Look at the project itself: what it is built with, how it is tested, how it is laid out. The design and the testing strategy follow what is already there.
 4. Run whatever checks the issue calls for.
+5. Look for an issue draft at `paths.issueDraft`. See [The issue draft](#the-issue-draft).
+
+### The issue draft
+
+A file at `paths.issueDraft` that git does not track is taken to be the text the issue was written from. Once the issue exists it is a second copy that will go stale, so the session clears it up instead of leaving that to the team.
+
+- **It says the same as the issue's description**, ignoring whitespace at the ends of lines and of the file. Nothing in it is unique. Mention it in the first-run line and remove it at the finish.
+- **It differs from the issue's description.** That is a contradiction: show what differs in the Intent round and ask which stands. The session works from the answer, and the file is removed at the finish, because by then the issue holds what was agreed.
+- **Git tracks it, or it is ignored by git.** It belongs to the project. Leave it alone and do not mention it.
+
+Never edit the file, and never commit it. On a resumed session, apply the same rules to whatever is there now.
 
 ## Round 1: Intent
 
@@ -81,7 +94,7 @@ Ask only what you cannot settle from the issue, the project, a check, or a defau
 
 - **What only the team knows.** A choice between behaviours where both are reasonable and the scenarios would differ. If the issue is thin, meaning it lacks a narrative (who wants what, and why), a problem, or success criteria, propose the missing parts here.
 - **What cannot be done.** Something the issue asks for that a check showed is not possible as things stand.
-- **What contradicts.** Two statements in the issue, or the issue and the project, that cannot both hold.
+- **What contradicts.** Two statements in the issue, or the issue and the project, that cannot both hold. An issue draft that differs from the issue is one of these.
 - **What will be costly to change.** A design choice with two or more workable options that differ in what they cost later: how something is produced, where it lives, what it depends on. Look for these before drafting, and ask here, with what each option costs. A decision made after the draft is written means writing the draft twice.
 
 Put them in a single round, most consequential first. Aim for five or fewer. If an answer raises a new question of one of these four kinds, ask it; otherwise move on. If there is nothing to ask, say so and go straight to drafting.
@@ -137,6 +150,7 @@ Add or update the feature's entry in `paths.featureIndex`. Then show the team, a
 2. **Push** of the current branch, so that links to the specification resolve.
 3. **Issue**, if `finalise.updateIssue` is true: rewrite the issue's description as a summary of what was agreed, in the form below.
 4. **Label**, if `finalise.readyLabel` is not empty: added when Ready, removed when a Ready specification has gone back to Draft, and created in `repo` if it does not exist.
+5. **Issue draft**, if there is one to remove: delete the file at `paths.issueDraft`. Do this last, and only once the issue on GitHub holds everything the file said: either the two already matched, or the issue update above went through. Otherwise leave the file and say why.
 
 The issue description is a summary, not a copy of the specification:
 
@@ -160,7 +174,7 @@ Status: **Ready** or **Draft**, with the open items if Draft
 
 Keep any other sections the issue already had, such as known limits, and update them if the session settled them. Requirements, scenarios, design and test procedures stay in the specification only, so there is one place to change them. Leave out the Decisions section when there are no ADRs.
 
-If the team strikes a line, tell them what that leaves behind before going on: without the push, the issue's link will not resolve; without the issue update, the issue and the specification say different things and nothing on GitHub shows the specification exists. Then do what was agreed, in the order above. Finish by saying where the specification is, its status, and anything still open.
+If the team strikes a line, tell them what that leaves behind before going on: without the push, the issue's link will not resolve; without the issue update, the issue and the specification say different things and nothing on GitHub shows the specification exists; without the removal of the issue draft, a stale copy of the issue stays in the working copy and shows up in every `git status`. Then do what was agreed, in the order above. Finish by saying where the specification is, its status, and anything still open.
 
 ## Resuming
 

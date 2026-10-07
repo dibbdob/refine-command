@@ -29,7 +29,7 @@ The command drafts the whole specification itself and keeps its questions to thr
 
 1. **Intent.** The few things only you can answer: a choice between behaviours, a design choice that would be costly to change later, something the issue asks for that turns out not to be possible, or a contradiction. Usually five questions or fewer.
 2. **Review.** The complete draft. Every default the command applied is listed under Assumptions, so you can overrule any of them. Design choices with lasting consequences are never assumed; they are asked in the Intent round and recorded as ADRs.
-3. **Finish.** One list of what is about to happen (commit, push, updated issue description, label) and a single yes. Strike any line you do not want.
+3. **Finish.** One list of what is about to happen (commit, push, updated issue description, label, removal of a leftover issue draft) and a single yes. Strike any line you do not want.
 
 Along the way it checks what it can before asking (how a tool behaves, whether a repository setting is available) and points out when an answer contradicts something already agreed.
 
@@ -46,9 +46,10 @@ The result is `docs/specs/NNNN-<slug>.md`, marked Ready or Draft, containing:
 - non-development tasks, each with an owner
 - the assumptions it made
 
-Two situations are handled on the way in:
+Three situations are handled on the way in:
 
 - **A thin issue.** If the issue has no clear narrative, problem or success criteria, the command proposes them in the Intent round. At the finish the issue's description is rewritten with what was agreed, so the issue and the specification say the same thing.
+- **A leftover issue draft.** If the text of the issue is still lying in the project as an untracked `issue.md`, the command removes it at the finish, once the issue on GitHub holds everything it said. If the file and the issue differ, the command asks which stands first. A file that git tracks or ignores is left alone.
 - **An unfinished specification.** If a Draft already exists for the issue, running the command again asks only about its open items. Running it on a Ready specification asks whether you want to revise it.
 
 ### Thorough mode
@@ -153,7 +154,8 @@ If the project already has a feature template, a Definition of Ready or an ADR t
     "definitionOfReady": "docs/specs/READY.md",
     "adrDir": "docs/decisions",
     "adrTemplate": "docs/decisions/TEMPLATE.md",
-    "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md"
+    "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md",
+    "issueDraft": "issue.md"
   },
   "process": {
     "mode": "lean",
@@ -172,6 +174,7 @@ If the project already has a feature template, a Definition of Ready or an ADR t
 |---|---|
 | `repo` | GitHub repository that holds the issues, as `owner/name`. Used for every `gh` call, so the git remotes of the checkout do not matter. |
 | `paths.*` | Where the documents live and where new ones are written, relative to the project root. |
+| `paths.issueDraft` | An untracked local copy of the issue's text, left over from writing the issue. Removed at the finish. Set to `""` to leave such a file alone. |
 | `process.mode` | `lean` (default) or `thorough`. See [Thorough mode](#thorough-mode). |
 | `process.deliveryBudget` | The largest a single feature may be. Anything bigger is split into phases. |
 | `finalise.commit` | Commit the specification at the end of the session. |
@@ -179,7 +182,7 @@ If the project already has a feature template, a Definition of Ready or an ADR t
 | `finalise.updateIssue` | Rewrite the issue's description as a summary of what was agreed: narrative, problem, success criteria, a link to the specification with its status, and the decisions with links to their ADRs. Requirements and scenarios stay in the specification. |
 | `finalise.readyLabel` | Label added to the issue when the specification is Ready, and removed if it goes back to Draft. Created in the repository on first use, with your agreement. Set to `""` to turn labelling off. |
 
-Even with these switched on, nothing leaves your working copy without a yes. At the finish the command shows one list of what it is about to commit, push, write to the issue and label, with the exact text, and you can strike any line.
+Even with these switched on, nothing leaves your working copy without a yes. At the finish the command shows one list of what it is about to commit, push, write to the issue, label and remove, with the exact text, and you can strike any line.
 
 ## What is fixed
 
