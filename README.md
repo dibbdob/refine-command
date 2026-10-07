@@ -8,6 +8,12 @@ A Claude Code command that turns a GitHub issue into a feature specification a t
 
 It works in a new project with nothing set up, and in an existing project that already has its own templates.
 
+A second command builds what a Ready specification describes:
+
+```
+/backlog:implement 42
+```
+
 ## Quick start
 
 You need [Claude Code](https://claude.com/claude-code) and the [GitHub CLI](https://cli.github.com), signed in.
@@ -33,7 +39,7 @@ The command drafts the whole specification itself and keeps its questions to thr
 
 1. **Intent.** The few things only you can answer: a choice between behaviours, a design choice that would be costly to change later, something the issue asks for that turns out not to be possible, or a contradiction. Usually five questions or fewer.
 2. **Review.** The complete draft. Every default the command applied is listed under Assumptions, so you can overrule any of them. Design choices with lasting consequences are never assumed; they are asked in the Intent round and recorded as ADRs.
-3. **Finish.** One list of what is about to happen (commit, push, updated issue description, label, removal of a leftover issue draft) and a single yes. Strike any line you do not want.
+3. **Finish.** One list of what is about to happen (commit, push, updated issue description, label) and a single yes. Strike any line you do not want.
 
 Along the way it checks what it can before asking (how a tool behaves, whether a repository setting is available) and points out when an answer contradicts something already agreed.
 
@@ -50,15 +56,25 @@ The result is `docs/specs/NNNN-<slug>.md`, marked Ready or Draft, containing:
 - non-development tasks, each with an owner
 - the assumptions it made
 
-Three situations are handled on the way in:
+Two situations are handled on the way in:
 
 - **A thin issue.** If the issue has no clear narrative, problem or success criteria, the command proposes them in the Intent round. At the finish the issue's description is rewritten with what was agreed, so the issue and the specification say the same thing.
-- **A leftover issue draft.** If the text of the issue is still lying in the project as an untracked `issue.md`, the command removes it at the finish, once the issue on GitHub holds everything it said. If the file and the issue differ, the command asks which stands first. A file that git tracks or ignores is left alone.
 - **An unfinished specification.** If a Draft already exists for the issue, running the command again asks only about its open items. Running it on a Ready specification asks whether you want to revise it.
 
 ### Thorough mode
 
 The default, lean mode, suits one person or a small team. When several people are in the session, or nothing should be assumed, set `"mode": "thorough"` in the configuration. The command then proposes each default for you to choose instead of applying it, and agrees the specification section by section.
+
+## Implementing a specification
+
+`/backlog:implement <issue-number>` builds the feature from its specification. It asks nothing about what to build, because that was agreed in refinement.
+
+1. It finds the specification for the issue and stops if there is none or it is still a Draft.
+2. It turns each scenario into a failing test, then writes the code that makes them pass, following the specification's design and implementation plan.
+3. It runs the whole test suite and reports the result.
+4. It shows one list of what is about to happen (commit, push, close the issue) and asks for a single yes. If a test fails, it reports the failure and offers nothing.
+
+It builds nothing beyond the specification, never changes a test to get a green run, and never edits the specification. If the specification turns out to be wrong or impossible, it stops and sends you back to `/backlog:refine`.
 
 ## Requirements
 
@@ -138,8 +154,7 @@ If the project already has a feature template, a Definition of Ready or an ADR t
     "definitionOfReady": "docs/specs/READY.md",
     "adrDir": "docs/decisions",
     "adrTemplate": "docs/decisions/TEMPLATE.md",
-    "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md",
-    "issueDraft": "issue.md"
+    "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md"
   },
   "process": {
     "mode": "lean",
@@ -150,6 +165,11 @@ If the project already has a feature template, a Definition of Ready or an ADR t
     "commitMessage": "#{issue} Specify: {title}",
     "updateIssue": true,
     "readyLabel": "ready"
+  },
+  "implement": {
+    "commit": true,
+    "commitMessage": "#{issue} Implement: {title}",
+    "closeIssue": true
   }
 }
 ```
@@ -158,15 +178,17 @@ If the project already has a feature template, a Definition of Ready or an ADR t
 |---|---|
 | `repo` | GitHub repository that holds the issues, as `owner/name`. Used for every `gh` call, so the git remotes of the checkout do not matter. |
 | `paths.*` | Where the documents live and where new ones are written, relative to the project root. |
-| `paths.issueDraft` | An untracked local copy of the issue's text, left over from writing the issue. Removed at the finish. Set to `""` to leave such a file alone. |
 | `process.mode` | `lean` (default) or `thorough`. See [Thorough mode](#thorough-mode). |
 | `process.deliveryBudget` | The largest a single feature may be. Anything bigger is split into phases. |
 | `finalise.commit` | Commit the specification at the end of the session. |
 | `finalise.commitMessage` | Commit message. `{issue}` and `{title}` are filled in. |
 | `finalise.updateIssue` | Rewrite the issue's description as a summary of what was agreed: narrative, problem, success criteria, a link to the specification with its status, and the decisions with links to their ADRs. Requirements and scenarios stay in the specification. |
 | `finalise.readyLabel` | Label added to the issue when the specification is Ready, and removed if it goes back to Draft. Created in the repository on first use, with your agreement. Set to `""` to turn labelling off. |
+| `implement.commit` | Commit the feature when `/backlog:implement` has built and verified it. |
+| `implement.commitMessage` | Commit message. `{issue}` and `{title}` are filled in. |
+| `implement.closeIssue` | Close the issue as completed once every phase of the specification is built. |
 
-Even with these switched on, nothing leaves your working copy without a yes. At the finish the command shows one list of what it is about to commit, push, write to the issue, label and remove, with the exact text, and you can strike any line.
+Even with these switched on, nothing leaves your working copy without a yes. At the finish the command shows one list of what it is about to commit, push, write to the issue and label, with the exact text, and you can strike any line.
 
 ## What is fixed
 
@@ -182,7 +204,7 @@ The command is deliberately opinionated. These are not configurable:
 - A feature is not Ready until every item of the Definition of Ready is met.
 - Features are kept small; a feature over the delivery budget is split into phases.
 
-If one of these does not suit you, fork this repository, edit `commands/refine.md`, and install the plugin from your fork.
+If one of these does not suit you, fork this repository, edit the files in `commands/`, and install the plugin from your fork.
 
 ## Updating and removing
 
@@ -217,7 +239,8 @@ The layout:
 ```
 .claude-plugin/plugin.json        plugin manifest
 .claude-plugin/marketplace.json   marketplace manifest, lists this one plugin
-commands/refine.md                the command, including the default documents
+commands/refine.md                the refine command, including the default documents
+commands/implement.md             the implement command
 ```
 
 ## Licence
