@@ -174,13 +174,13 @@ Write the complete specification to `paths.featuresDir`, in a file named with th
 | Narrative and problem | From the issue or the Intent round | No default. These are never assumed |
 | Functional requirements | One per success criterion, numbered | Derived from the success criteria and nothing more |
 | Non-functional requirements | Performance, security, reliability, observability | "None" for each, unless the issue or a check points to one. Never invent a threshold |
-| Acceptance criteria | Gherkin scenarios with concrete values, one scenario per test, each with an ID (see [Scenario IDs](#scenario-ids)) and an area (see [Areas](#areas)) | A happy path for every functional requirement, a sad path for every invalid input and every failure the issue names, and an edge case at every boundary |
+| Acceptance criteria | Gherkin scenarios with concrete values, one scenario per test, each with an ID (see [Scenario IDs](#scenario-ids)) and an area (see [Areas](#areas)) | A happy path for every functional requirement, a sad path for every invalid input and every failure the issue names, an edge case at every boundary, and, where two actions can reach the same data at once, a scenario for what happens when they do |
 | Out of scope | What is deliberately not built | Anything not needed for the success criteria, including anything the team was offered in the Intent round and did not choose. Name the nearest things someone might expect to be included |
 | Changes to current behaviour | Each scenario in force that this one replaces or removes, by ID, and any new area it creates | Found by reading the behaviour folder, not asked. "None." when there is nothing |
-| Design | Interfaces, data, visuals, as far as they apply, and the standards relied on | The simplest design that satisfies the scenarios and follows the project's standards, using what the project already uses. No new dependency where an existing one will do |
+| Design | Interfaces, data, visuals, as far as they apply, and the standards relied on. For anything a person sees, see [Visual work](#visual-work) | The simplest design that satisfies the scenarios and follows the project's standards, using what the project already uses. No new dependency where an existing one will do |
 | External dependencies | Each with whether it is available now | Checked, not asked |
 | Implementation plan | Ordered, concrete steps | The first step is to turn each scenario into a failing automated test, where the project has a test setup. No tests are written during refinement. Assume it fits `process.deliveryBudget` when it is a handful of steps in one area. Otherwise propose phases |
-| Testing strategy | How each scenario and each non-functional requirement is verified | Automated with the project's existing test setup. A scenario that cannot be automated gets a written manual procedure with the exact commands. If the project has no test setup, every scenario gets one; do not add a test framework unless the issue asks for it. Never plan a test that breaks the default branch or a live system |
+| Testing strategy | How each scenario and each non-functional requirement is verified, and at what level (see [Test levels](#test-levels)) | Automated with the project's existing test setup. A scenario that cannot be automated gets a written manual procedure with the exact commands. If the project has no test setup, every scenario gets one; do not add a test framework unless the issue asks for it. Never plan a test that breaks the default branch or a live system |
 | Non-development tasks | Configuration, infrastructure, accounts, documentation | Derived from the design. Owned by the person in the session |
 | Assumptions | Every default applied above | |
 
@@ -194,6 +194,32 @@ Every scenario carries an ID, so that a test, a later specification or a script 
 - **Used everywhere the scenario is named.** The testing strategy lists each scenario by its ID and title, with exactly Yes or No in its Automated column. The checker reads that column: a scenario marked No needs a written manual procedure instead of a test. The implementation plan and Changes to current behaviour refer to scenarios by ID, or by title for an earlier scenario that has none.
 - **A replacement is a new scenario.** A scenario that replaces an earlier one gets its own ID here; the earlier ID is retired, not carried over.
 - **Do not restate what already holds.** A scenario that only repeats one already in force is not written again. The requirement it would have covered cites the existing scenario instead, and the testing strategy says its existing test must pass unmodified.
+
+### Concurrent actions
+
+Wherever the feature reads and then writes shared data, or two people or processes could act on the same thing at once, the specification says what happens when they do: which one wins, which is refused, and what each is told. The outcome is a choice between behaviours, so if the issue and the project's standards do not settle it, it is a question for the Intent round, not a default. Write one scenario for each outcome. A feature that touches no shared data says so in one line under Design and needs no such scenario.
+
+### Visual work
+
+A feature has a visual component when it adds or changes anything a person sees: a screen, a page, a dialog, a message, a state of one.
+
+- **Each screen or state has a wireframe.** The Design section holds a wireframe or mock-up for every screen or state the feature adds or changes, including its empty, loading and error states where it has them. Use what the team supplies, as a link or a file in the project. Where they supply none, draft a plain wireframe in the specification, as text, and show it in the review; it is the team's to accept or replace.
+- **It follows the project's design standards.** Read the standards that apply to the files the feature will touch, follow them, and cite them like any other.
+- **What is seen is specified like anything else.** Scenarios state what the person sees in concrete terms: the text of a message, which control is disabled, what the empty state says.
+- **A missing wireframe is an open item.** A specification with a visual component and no agreed wireframe is not Ready.
+
+A feature with nothing a person sees says so in one line under Design.
+
+### Test levels
+
+The testing strategy gives each scenario a level, in a Level column:
+
+- **In process:** the scenario is proved without anything outside the code under test.
+- **Integration:** it is proved against a real dependency, such as a database, a queue or another service, and the entry names which.
+
+Behaviour that belongs to a dependency is proved against that dependency, not a stand-in for it: locking, transactions, constraints, ordering, time-outs. A mock cannot show that two writers are kept apart.
+
+If a scenario needs test infrastructure the project does not have, do not quietly test it at a lower level. List the infrastructure under External dependencies as not available, and raise it in the Intent round as a choice with a cost: build the infrastructure as part of this feature, verify the scenario by hand for now, or leave the behaviour out of scope.
 
 Two things are never settled by a default:
 
@@ -367,8 +393,8 @@ None.
 
 ## Testing strategy
 
-| Scenario | Automated | How it is verified |
-|----------|-----------|--------------------|
+| Scenario | Automated | Level | How it is verified |
+|----------|-----------|-------|--------------------|
 
 ## Non-development tasks
 
@@ -410,7 +436,8 @@ A specification is Ready when someone who was not in the session could build the
 
 - [ ] Choices that would be costly to reverse have been made by the team and recorded as decisions
 - [ ] The team has accepted or overruled every assumption, or none was made beyond the agreed conventions
-- [ ] Each scenario has a stated way of being verified
+- [ ] Each scenario has a stated way of being verified, at a stated level, and any test infrastructure it needs exists
+- [ ] If it changes anything a person sees, each screen or state has an agreed wireframe
 
 ## Whether it can start
 

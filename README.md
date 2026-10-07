@@ -73,13 +73,13 @@ The result is `docs/specs/NNNN-<slug>.md`, marked Ready or Draft, containing:
 
 - narrative and problem
 - functional and non-functional requirements
-- acceptance criteria in Gherkin: happy paths, sad paths, edge cases, each scenario with a stable ID such as `0042-03` that its test also carries
+- acceptance criteria in Gherkin: happy paths, sad paths, edge cases and what happens when two actions meet, each scenario with a stable ID such as `0042-03` that its test also carries
 - what is out of scope
 - what it changes in current behaviour
-- design, with an ADR for each lasting decision
+- design, with an ADR for each lasting decision, and a wireframe for each screen or state the feature changes
 - external dependencies
 - implementation plan, split into phases if it is too big
-- testing strategy for every scenario
+- testing strategy for every scenario, saying whether it is proved in process or against a real dependency
 - non-development tasks, each with an owner
 - the assumptions it made
 
