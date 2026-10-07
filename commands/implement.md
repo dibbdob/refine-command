@@ -19,12 +19,19 @@ Read `.claude/refine.json` at the project root. This command uses `repo` and `pa
   "implement": {
     "commit": true,
     "commitMessage": "#{issue} Implement: {title}",
-    "closeIssue": true
+    "closeIssue": true,
+    "testPaths": []
   }
 }
 ```
 
 A value that is absent takes the value shown above; `paths.featuresDir` defaults to `docs/specs`. Pass `repo` to every `gh` call with `--repo`. If the file or `repo` is missing, say that the project has not been refined yet and stop.
+
+`implement.testPaths` is a list of glob patterns naming the project's test files, for the checker below. Leave it empty to use the common conventions (`tests/`, `test_*`, `*.test.*`, `*_test.*`, `spec/`).
+
+## The checker
+
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/backlog_check.py"`, run from the project root, makes the checks that need no judgement. It prints one line for each FAIL and each WARN and ends with a count. A FAIL stops the work at the point described below. A WARN is shown to the user word for word in the finish report. If the checker cannot run, say so in the report and do not describe its checks as passed.
 
 ## Before building
 
@@ -33,7 +40,7 @@ Do these checks silently and report only what stops the work.
 1. **Find the specification**: the file in `paths.featuresDir` whose name starts with the issue number padded to four digits.
    - None: say so, point to the refine command, and stop.
    - Status is Draft: list its open items, say it has to be Ready first, and stop.
-   - Status is Ready: carry on.
+   - Status is Ready: run the checker with `spec <issue-number>`. If it fails, show its output, say the specification needs revising through the refine command, and stop. A specification written before scenarios had IDs fails here for that reason.
 2. **Read it all**, with every ADR it links and the project's `CLAUDE.md` if there is one.
 3. **Check the issue** in `repo`. If it is closed, say so and ask whether to carry on.
 4. **Check the working copy.** If it has uncommitted changes that are not part of this feature, say what they are and ask whether to carry on; they will not be committed.
@@ -43,10 +50,10 @@ Do these checks silently and report only what stops the work.
 
 Follow the specification's implementation plan in its order.
 
-1. **Tests first.** Turn each scenario into one automated test, named after the scenario, using the test setup and the commands the testing strategy gives. Run the suite and confirm the new tests fail for the reason expected. A test that passes before the code changes is worth one line saying why.
+1. **Tests first.** Turn each scenario into one automated test, named after the scenario, using the test setup and the commands the testing strategy gives. Where a scenario has an ID, the test carries it, written exactly as in the specification, in the test's name or in a comment on the line above it, so that a text search for the ID finds the test. Run the suite and confirm the new tests fail for the reason expected. A test that passes before the code changes is worth one line saying why.
 2. **Make them pass** with the design the specification describes: its names, its messages, its layout. Write the least code that satisfies the scenarios, in the style of the code around it.
 3. **Do the non-development tasks that are files in the repository**, such as documentation. Leave the rest, such as accounts or infrastructure, and list them for their owner.
-4. **Verify.** Run the whole suite, not only the new tests. Carry out any manual procedure the testing strategy gives and record what happened.
+4. **Verify.** Run the whole suite, not only the new tests. Carry out any manual procedure the testing strategy gives and record what happened. Then run the checker with `tests <issue-number>`. It fails if a scenario of this specification has no test carrying its ID, if a test carries an ID no specification defines, or if the test for any other scenario was changed or removed without the specification listing it under Changes to earlier specifications.
 
 If the specification has phases, build the first phase that is not yet built, and say which.
 
@@ -58,7 +65,9 @@ Three things are not done here:
 
 ## Finish
 
-If any test fails or any scenario could not be verified, say so with the output, and offer nothing below.
+If any test fails, any scenario could not be verified, or the checker reports a FAIL, say so with the output, and offer nothing below. A checker failure is fixed in the code or the tests, never by editing the specification to match.
+
+Before the list, run the checker with `closed`. If it fails, something belonging to a closed issue has been edited: show what it found and offer nothing below.
 
 Otherwise report in this order: what was built, the result of the suite as numbers, anything left for someone else, and anything noticed but not built. Then show, as one numbered list, what is about to leave the working copy, and ask for a single yes. A line can be struck by saying so.
 

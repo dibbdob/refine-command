@@ -73,8 +73,9 @@ The result is `docs/specs/NNNN-<slug>.md`, marked Ready or Draft, containing:
 
 - narrative and problem
 - functional and non-functional requirements
-- acceptance criteria in Gherkin: happy paths, sad paths, edge cases
+- acceptance criteria in Gherkin: happy paths, sad paths, edge cases, each scenario with a stable ID such as `0042-03` that its test also carries
 - what is out of scope
+- what it changes in earlier specifications
 - design, with an ADR for each lasting decision
 - external dependencies
 - implementation plan, split into phases if it is too big
@@ -82,10 +83,11 @@ The result is `docs/specs/NNNN-<slug>.md`, marked Ready or Draft, containing:
 - non-development tasks, each with an owner
 - the assumptions it made
 
-Two situations are handled on the way in:
+Three situations are handled on the way in:
 
 - **A thin issue.** If the issue has no clear narrative, problem or success criteria, the command proposes them in the Intent round. At the finish the issue's description is rewritten with what was agreed, so the issue and the specification say the same thing.
-- **An unfinished specification.** If a Draft already exists for the issue, running the command again asks only about its open items. Running it on a Ready specification asks whether you want to revise it.
+- **An issue that changes earlier work.** The command reads every earlier specification and ADR, and lists what the new issue changes in them: scenarios it replaces, tests that have to change, lines that no longer hold. If the issue would reverse an earlier decision without saying so, it asks which stands. The earlier specifications themselves are left untouched.
+- **An unfinished specification.** If a Draft already exists for the issue, running the command again asks only about its open items. Running it on a Ready specification asks whether you want to revise it, as long as its issue is still open; once the issue is closed, a change starts with a new issue.
 
 ### Thorough mode
 
@@ -102,10 +104,25 @@ The default, lean mode, suits one person or a small team. When several people ar
 
 It builds nothing beyond the specification, never changes a test to get a green run, and never edits the specification. If the specification turns out to be wrong or impossible, it stops and sends you back to `/backlog:refine`.
 
+## What is checked by script
+
+Some promises of the process are too important to rest on careful reading, so a script checks them and the commands stop when it fails. It is `scripts/backlog_check.py` in this plugin, and it can be run by hand or in CI from the project root.
+
+| Command | Run by | Fails when |
+|---|---|---|
+| `spec <issue>` | refine, before the review and again when setting Ready; implement, before building | a scenario has no ID, an ID is malformed or used twice, a requirement is cited by no scenario, a scenario is missing from the testing strategy, a link does not resolve, or a Ready specification has open items |
+| `tests <issue>` | implement, after the suite passes | a scenario has no test carrying its ID, a test carries an ID no specification defines, or the test for any other scenario was changed or removed without the specification listing it |
+| `closed` | both, before anything is committed | a specification or ADR belonging to a closed issue was edited after the issue closed |
+
+The second row is the guard against bending a test to get a green run. Test code written before scenarios had IDs cannot be tied to a specification, so a change to it is reported as a warning for a person to look at, not as a failure.
+
+What no script checks: whether the right questions were asked, whether an assumption is sensible, and whether a test really asserts what its scenario says.
+
 ## Requirements
 
 - [Claude Code](https://claude.com/claude-code)
 - The [GitHub CLI](https://cli.github.com), signed in (`gh auth status`)
+- Python 3, for the checker. It uses only the standard library, whatever language your project is in
 - A GitHub repository with the issue you want to refine
 
 ## Install
@@ -195,7 +212,8 @@ If the project already has a feature template, a Definition of Ready or an ADR t
   "implement": {
     "commit": true,
     "commitMessage": "#{issue} Implement: {title}",
-    "closeIssue": true
+    "closeIssue": true,
+    "testPaths": []
   }
 }
 ```
@@ -213,6 +231,7 @@ If the project already has a feature template, a Definition of Ready or an ADR t
 | `implement.commit` | Commit the feature when `/backlog:implement` has built and verified it. |
 | `implement.commitMessage` | Commit message. `{issue}` and `{title}` are filled in. |
 | `implement.closeIssue` | Close the issue as completed once every phase of the specification is built. |
+| `implement.testPaths` | Glob patterns naming the project's test files, for the checker. Empty means the common conventions: `tests/`, `test_*`, `*.test.*`, `*_test.*`, `spec/`. |
 
 Even with these switched on, nothing leaves your working copy without a yes. At the finish the command shows one list of what it is about to commit, push, write to the issue and label, with the exact text, and you can strike any line.
 
@@ -221,6 +240,7 @@ Even with these switched on, nothing leaves your working copy without a yes. At 
 The command is deliberately opinionated. These are not configurable:
 
 - One feature specification per GitHub issue, numbered by the issue.
+- Closed work is a record. A specification whose issue is closed is never edited, and neither are its ADRs or the issue. A later issue that changes it says so in its own specification, under Changes to earlier specifications, and the feature index shows which specifications it amends.
 - The command drafts; you review. In lean mode it applies its defaults and lists them, instead of asking.
 - Narrative, problem and lasting design decisions are never assumed.
 - Acceptance criteria are written in Gherkin, with concrete values, one scenario per test.
@@ -267,6 +287,7 @@ The layout:
 .claude-plugin/marketplace.json   marketplace manifest, lists this one plugin
 commands/refine.md                the refine command, including the default documents
 commands/implement.md             the implement command
+scripts/backlog_check.py          the checks that need no judgement
 ```
 
 ## Licence
