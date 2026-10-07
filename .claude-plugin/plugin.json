@@ -1,7 +1,7 @@
 {
   "name": "backlog",
   "description": "Take a GitHub issue from a rough idea to working, tested code: refine it into a specification a team can build from, then implement it test-first",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "license": "MIT",
   "author": { "name": "Jan Wilson" }
 }

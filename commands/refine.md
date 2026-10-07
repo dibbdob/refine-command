@@ -125,7 +125,7 @@ Every scenario carries an ID, so that a test, a later specification or a script 
 - **Form.** The specification's four-digit number, a hyphen, and a two-digit sequence in the order the scenarios appear: `0042-01`, `0042-02`. Write it as a Gherkin tag on the line above the scenario: `@0042-01`.
 - **Stable once Ready.** While the specification is a Draft, renumber freely to keep the sequence in order. Once it is Ready, an ID is never changed and never reused; a scenario added in a later revision takes the next free number, and one that is dropped leaves a gap.
 - **Tied to its requirements.** A comment on the line above the tag names the requirements the scenario covers: `# FR-1, FR-3`.
-- **Used everywhere the scenario is named.** The testing strategy lists each scenario by its ID and title. The implementation plan and Changes to earlier specifications refer to scenarios by ID, or by title for an earlier scenario that has none.
+- **Used everywhere the scenario is named.** The testing strategy lists each scenario by its ID and title, with exactly Yes or No in its Automated column. The checker reads that column: a scenario marked No needs a written manual procedure instead of a test. The implementation plan and Changes to earlier specifications refer to scenarios by ID, or by title for an earlier scenario that has none.
 - **A replacement is a new scenario.** A scenario that replaces an earlier one gets its own ID here; the earlier ID is retired, not carried over.
 - **Do not restate what already holds.** A scenario that only repeats one already in force is not written again. The requirement it would have covered cites the existing scenario instead, and the testing strategy says its existing test must pass unmodified.
 

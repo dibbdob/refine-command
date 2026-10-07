@@ -119,6 +119,8 @@ Some promises of the process are too important to rest on careful reading, so a 
 
 The second row is the guard against bending a test to get a green run. `red` and `green` are the evidence that the tests came first; the record of the failing run is kept inside `.git`, not in your project's files. Test code written before scenarios had IDs cannot be tied to a specification, so a change to it is reported as a warning for a person to look at, not as a failure.
 
+A scenario the testing strategy marks as not automated is not expected to have a test. The checker lists it as a warning, so that its written procedure is carried out by hand and the result reported. A project with no test setup at all still works: every scenario is manual, and `red` and `green` have nothing to run.
+
 What no script checks: whether the right questions were asked, whether an assumption is sensible, and whether a test really asserts what its scenario says.
 
 ## Requirements

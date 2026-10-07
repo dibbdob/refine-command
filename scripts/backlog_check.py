@@ -166,6 +166,31 @@ class Spec:
                 found.append(match.group(1))
         return found
 
+    def automation(self):
+        """Each scenario ID's entry in the testing strategy's Automated column."""
+        column, entries = None, {}
+        for line in self.section("Testing strategy").splitlines():
+            if not line.lstrip().startswith("|"):
+                continue
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if column is None:
+                lowered = [cell.lower() for cell in cells]
+                if "automated" in lowered:
+                    column = lowered.index("automated")
+                continue
+            if column < len(cells):
+                for scenario_id in BARE_ID.findall(line) + TAG.findall(line):
+                    entries[scenario_id] = cells[column].lower()
+        return entries
+
+    @property
+    def manual_ids(self):
+        return {i for i, entry in self.automation().items() if entry == "no"}
+
+    @property
+    def automated_ids(self):
+        return [i for i in self.ids if i not in self.manual_ids]
+
     def ids_named_in(self, section):
         text = self.section(section)
         return set(BARE_ID.findall(text)) | set(TAG.findall(text))
@@ -213,6 +238,13 @@ def check_spec(config, issue, report):
         report.check(
             scenario_id in strategy_ids,
             f"{name}: @{scenario_id} has no entry in the testing strategy",
+        )
+
+    for scenario_id, entry in spec.automation().items():
+        report.check(
+            entry in ("yes", "no"),
+            f"{name}: the testing strategy must say Yes or No under Automated "
+            f"for @{scenario_id}, not {entry!r}",
         )
 
     report.check(
@@ -284,9 +316,14 @@ def check_tests(config, issue, base, report):
         raise CannotRun(f"{name} has no scenario IDs; run 'spec {issue}' first")
 
     tagged = tagged_files(config)
-    for scenario_id in spec.ids:
+    for scenario_id in spec.automated_ids:
         report.check(
             scenario_id in tagged, f"@{scenario_id} is not carried by any test"
+        )
+    for scenario_id in sorted(spec.manual_ids - set(tagged)):
+        report.warn(
+            f"@{scenario_id} is verified by hand, not by a test; "
+            "carry out its procedure and record the result"
         )
 
     known = all_spec_ids(config)
@@ -447,7 +484,7 @@ def check_state(config, report):
                 f"{name}: issue #{number} is closed but the specification is "
                 f"{spec.status}",
             )
-            for scenario_id in spec.ids:
+            for scenario_id in spec.automated_ids:
                 report.check(
                     scenario_id in tagged or scenario_id in retired,
                     f"{name}: issue #{number} is closed but @{scenario_id} is "
@@ -491,7 +528,7 @@ def evidence_file(issue):
 
 def test_digests(config, spec):
     """A fingerprint of the test that follows each of this specification's IDs."""
-    wanted, digests = set(spec.ids), {}
+    wanted, digests = set(spec.automated_ids), {}
     for paths in tagged_files(config).values():
         for path in paths:
             _, tests = split_tests(read(path).splitlines())
@@ -514,8 +551,11 @@ def run_suite(command):
 def record_red(config, issue, command, report):
     """The new tests exist and the suite fails, before the code is written."""
     spec = Spec(find_spec(config, issue))
+    if not spec.automated_ids:
+        print("no automated scenarios in this specification; nothing to record")
+        return
     digests = test_digests(config, spec)
-    for scenario_id in spec.ids:
+    for scenario_id in spec.automated_ids:
         report.check(
             scenario_id in digests,
             f"@{scenario_id} has no test yet; every test is written before the code",
@@ -548,6 +588,9 @@ def record_red(config, issue, command, report):
 def check_green(config, issue, command, report):
     """The suite passes, and the tests were seen to fail first."""
     spec = Spec(find_spec(config, issue))
+    if not spec.automated_ids:
+        print("no automated scenarios in this specification; nothing to run")
+        return
     path = evidence_file(issue)
     report.check(
         path.is_file(),
@@ -566,7 +609,7 @@ def check_green(config, issue, command, report):
         f"not the current {head[:7]}",
     )
     digests = test_digests(config, spec)
-    for scenario_id in spec.ids:
+    for scenario_id in spec.automated_ids:
         if digests.get(scenario_id) != evidence["tests"].get(scenario_id):
             report.warn(
                 f"the test for @{scenario_id} was changed after it was seen to fail"
