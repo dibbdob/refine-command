@@ -190,7 +190,7 @@ Status: **Ready** or **Draft**, with the open items if Draft
 
 Keep any other sections the issue already had, such as known limits, and update them if the session settled them. Requirements, scenarios, design and test procedures stay in the specification only, so there is one place to change them. Leave out the Decisions section when there are no ADRs, and the Changes to earlier work section when there are none. Only this issue is written to; an earlier issue is never edited, open or closed.
 
-If the team strikes a line, tell them what that leaves behind before going on: without the push, the issue's link will not resolve; without the issue update, the issue and the specification say different things and nothing on GitHub shows the specification exists. Then do what was agreed, in the order above. Finish by saying where the specification is, its status, and anything still open.
+If the team strikes a line, tell them what that leaves behind before going on: without the push, the issue's link will not resolve; without the issue update, the issue and the specification say different things and nothing on GitHub shows the specification exists. Then do what was agreed, in the order above. Afterwards run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/backlog_check.py" state`, which compares every issue with its specification and the feature index, and report any FAIL it prints as something that now needs putting right. Finish by saying where the specification is, its status, and anything still open.
 
 ## Resuming
 

@@ -1,0 +1,45 @@
+name: Version
+
+# An installed plugin only updates when its version changes, so a change to a
+# command or script that keeps the old version never reaches anyone.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  bumped:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Commands and scripts change only with a new version
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "No earlier commit to compare with; nothing to check."
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE" HEAD -- commands scripts)
+          if [ -z "$changed" ]; then
+            echo "No command or script changed."
+            exit 0
+          fi
+          version() { git show "$1:.claude-plugin/plugin.json" | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])'; }
+          before=$(version "$BASE")
+          after=$(version HEAD)
+          if [ "$before" = "$after" ]; then
+            echo "These changed but the version is still $after:"
+            echo "$changed"
+            echo "Raise the version in .claude-plugin/plugin.json."
+            exit 1
+          fi
+          echo "Version raised from $before to $after."
+      - name: The checker compiles
+        run: python3 -m py_compile scripts/backlog_check.py

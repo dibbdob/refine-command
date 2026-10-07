@@ -50,10 +50,10 @@ Do these checks silently and report only what stops the work.
 
 Follow the specification's implementation plan in its order.
 
-1. **Tests first.** Turn each scenario into one automated test, named after the scenario, using the test setup and the commands the testing strategy gives. Where a scenario has an ID, the test carries it, written exactly as in the specification, in the test's name or in a comment on the line above it, so that a text search for the ID finds the test. Run the suite and confirm the new tests fail for the reason expected. A test that passes before the code changes is worth one line saying why.
+1. **Tests first.** Turn each scenario into one automated test, named after the scenario, using the test setup and the commands the testing strategy gives. Where a scenario has an ID, the test carries it, written exactly as in the specification, in the test's name or in a comment on the line above it, so that a text search for the ID finds the test. Then run the suite through the checker, with `red <issue-number> -- <the test command>`, before writing any code. It confirms every scenario has its test and that the suite fails, and records that run. If it fails because the suite already passes, the new tests prove nothing as written: find out why before going on. Confirm the new tests fail for the reason expected. A test that passes before the code changes is worth one line saying why.
 2. **Make them pass** with the design the specification describes: its names, its messages, its layout. Write the least code that satisfies the scenarios, in the style of the code around it.
 3. **Do the non-development tasks that are files in the repository**, such as documentation. Leave the rest, such as accounts or infrastructure, and list them for their owner.
-4. **Verify.** Run the whole suite, not only the new tests. Carry out any manual procedure the testing strategy gives and record what happened. Then run the checker with `tests <issue-number>`. It fails if a scenario of this specification has no test carrying its ID, if a test carries an ID no specification defines, or if the test for any other scenario was changed or removed without the specification listing it under Changes to earlier specifications.
+4. **Verify.** Run the whole suite, not only the new tests, through the checker, with `green <issue-number> -- <the test command>`. It fails if the suite fails or if no failing run was recorded first, and it warns about any test that was edited after it was seen to fail. Carry out any manual procedure the testing strategy gives and record what happened. Then run the checker with `tests <issue-number>`. It fails if a scenario of this specification has no test carrying its ID, if a test carries an ID no specification defines, or if the test for any other scenario was changed or removed without the specification listing it under Changes to earlier specifications.
 
 If the specification has phases, build the first phase that is not yet built, and say which.
 
@@ -75,4 +75,4 @@ Otherwise report in this order: what was built, the result of the suite as numbe
 2. **Push** of the current branch.
 3. **Close the issue** as completed, if `implement.closeIssue` is true and every phase of the specification is now built. If phases remain, leave it open and say which are left.
 
-Then do what was agreed, in that order, and finish by saying what is on the remote and the state of the issue.
+Then do what was agreed, in that order. Afterwards run the checker with `state`, which compares every issue with its specification and the feature index, and report any FAIL it prints as something that now needs putting right. Finish by saying what is on the remote and the state of the issue.

@@ -4,12 +4,17 @@
     backlog_check.py spec <issue>     the specification is complete and consistent
     backlog_check.py tests <issue>    every scenario has a test, and no other test was touched
     backlog_check.py closed           nothing belonging to a closed issue has been edited
+    backlog_check.py state            issues, specifications and the index agree
+    backlog_check.py red <issue> -- <test command>     record the new tests failing
+    backlog_check.py green <issue> -- <test command>   the suite passes, after a red
 
 Run from the project root. Reads .claude/refine.json. Standard library only.
 Exit status: 0 all checks passed, 1 at least one failed, 2 the check could not run.
 """
 
 import argparse
+import datetime
+import hashlib
 import json
 import re
 import subprocess
@@ -81,6 +86,8 @@ def load_config():
         "repo": config.get("repo"),
         "featuresDir": paths.get("featuresDir", "docs/specs").rstrip("/"),
         "adrDir": paths.get("adrDir", "docs/decisions").rstrip("/"),
+        "featureIndex": paths.get("featureIndex", "docs/specs/README.md"),
+        "readyLabel": config.get("finalise", {}).get("readyLabel", "ready"),
         "testPaths": config.get("implement", {}).get("testPaths"),
     }
 
@@ -250,9 +257,22 @@ def read(path):
         return ""
 
 
+def tagged_files(config):
+    """Each scenario ID carried outside the documents, and the files carrying it."""
+    tagged = {}
+    for path in project_files(config):
+        for scenario_id in set(TAG.findall(read(path))):
+            tagged.setdefault(scenario_id, []).append(path)
+    return tagged
+
+
+def spec_paths(config):
+    return sorted(Path(config["featuresDir"]).glob("[0-9][0-9][0-9][0-9]-*.md"))
+
+
 def all_spec_ids(config):
     ids = set()
-    for path in Path(config["featuresDir"]).glob("[0-9][0-9][0-9][0-9]-*.md"):
+    for path in spec_paths(config):
         ids.update(Spec(path).ids)
     return ids
 
@@ -263,12 +283,7 @@ def check_tests(config, issue, base, report):
     if not spec.ids:
         raise CannotRun(f"{name} has no scenario IDs; run 'spec {issue}' first")
 
-    files = project_files(config)
-    tagged = {}  # id -> files that carry it
-    for path in files:
-        for scenario_id in set(TAG.findall(read(path))):
-            tagged.setdefault(scenario_id, []).append(path)
-
+    tagged = tagged_files(config)
     for scenario_id in spec.ids:
         report.check(
             scenario_id in tagged, f"@{scenario_id} is not carried by any test"
@@ -356,23 +371,12 @@ def moved_tail(old_body, new_body, new_lines):
 
 
 def check_closed(config, report):
-    if not config["repo"]:
-        raise CannotRun("no repo in .claude/refine.json")
-    result = subprocess.run(
-        [
-            "gh", "issue", "list", "--repo", config["repo"], "--state", "closed",
-            "--limit", "1000", "--json", "number,closedAt",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise CannotRun(f"gh issue list: {result.stderr.strip()}")
+    closed = gh_issues(config, "closed", "number,closedAt")
 
     features = Path(config["featuresDir"])
     adr_dir = Path(config["adrDir"]).resolve()
     frozen = {}  # file -> (closedAt, issue), earliest close wins
-    for issue in json.loads(result.stdout):
+    for issue in closed:
         for spec_path in features.glob(f"{issue['number']:04d}-*.md"):
             paths = [spec_path]
             for target, _ in LINK.findall(spec_path.read_text()):
@@ -401,6 +405,174 @@ def check_closed(config, report):
         )
 
 
+def gh_issues(config, state, fields):
+    if not config["repo"]:
+        raise CannotRun("no repo in .claude/refine.json")
+    result = subprocess.run(
+        [
+            "gh", "issue", "list", "--repo", config["repo"], "--state", state,
+            "--limit", "1000", "--json", fields,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise CannotRun(f"gh issue list: {result.stderr.strip()}")
+    return json.loads(result.stdout)
+
+
+def check_state(config, report):
+    """The issue, the specification and the feature index tell the same story."""
+    issues = {
+        issue["number"]: issue
+        for issue in gh_issues(config, "all", "number,state,labels,body")
+    }
+    index = read(config["featureIndex"])
+    tagged = tagged_files(config)
+    specs = [Spec(path) for path in spec_paths(config)]
+    retired = set()
+    for spec in specs:
+        retired |= spec.ids_named_in(CHANGES_SECTION) - set(spec.ids)
+
+    for spec in specs:
+        name, number = spec.path.name, int(spec.number)
+        issue = issues.get(number)
+        report.check(issue, f"{name}: there is no issue #{number} in {config['repo']}")
+        if not issue:
+            continue
+
+        if issue["state"] == "CLOSED":
+            report.check(
+                spec.status == "Ready",
+                f"{name}: issue #{number} is closed but the specification is "
+                f"{spec.status}",
+            )
+            for scenario_id in spec.ids:
+                report.check(
+                    scenario_id in tagged or scenario_id in retired,
+                    f"{name}: issue #{number} is closed but @{scenario_id} is "
+                    "carried by no test and no later specification retires it",
+                )
+        elif config["readyLabel"]:
+            labelled = config["readyLabel"] in {
+                label["name"] for label in issue["labels"]
+            }
+            report.check(
+                labelled == (spec.status == "Ready"),
+                f"{name}: the specification is {spec.status} but issue #{number} "
+                f"{'has' if labelled else 'does not have'} the "
+                f"'{config['readyLabel']}' label",
+            )
+
+        body = issue["body"] or ""
+        report.check(
+            name in body, f"{name}: issue #{number} does not link to it"
+        )
+        stated = re.search(r"Status:\s*\*\*(\w+)\*\*", body)
+        report.check(
+            stated and stated.group(1) == spec.status,
+            f"{name}: the specification is {spec.status} but issue #{number} "
+            f"says {stated.group(1) if stated else 'nothing about its status'}",
+        )
+
+        rows = [line for line in index.splitlines() if name in line]
+        report.check(rows, f"{name}: not listed in {config['featureIndex']}")
+        if rows:
+            report.check(
+                spec.status in rows[0],
+                f"{name}: the specification is {spec.status} but "
+                f"{config['featureIndex']} shows something else",
+            )
+
+
+def evidence_file(issue):
+    return Path(git("rev-parse", "--git-dir").strip()) / "backlog" / f"{issue:04d}.json"
+
+
+def test_digests(config, spec):
+    """A fingerprint of the test that follows each of this specification's IDs."""
+    wanted, digests = set(spec.ids), {}
+    for paths in tagged_files(config).values():
+        for path in paths:
+            _, tests = split_tests(read(path).splitlines())
+            for ids, body in tests:
+                for scenario_id in wanted.intersection(ids):
+                    text = "\n".join(body).encode()
+                    digests[scenario_id] = hashlib.sha256(text).hexdigest()
+    return digests
+
+
+def run_suite(command):
+    if not command:
+        raise CannotRun("give the test command after '--'")
+    try:
+        return subprocess.run(command).returncode
+    except OSError as error:
+        raise CannotRun(f"{' '.join(command)}: {error}")
+
+
+def record_red(config, issue, command, report):
+    """The new tests exist and the suite fails, before the code is written."""
+    spec = Spec(find_spec(config, issue))
+    digests = test_digests(config, spec)
+    for scenario_id in spec.ids:
+        report.check(
+            scenario_id in digests,
+            f"@{scenario_id} has no test yet; every test is written before the code",
+        )
+    status = run_suite(command)
+    report.check(
+        status != 0,
+        "the suite passed before the code was written, "
+        "so the new tests do not show that anything was missing",
+    )
+    if report.failures:
+        return
+    path = evidence_file(issue)
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "head": git("rev-parse", "HEAD").strip(),
+                "command": command,
+                "exit": status,
+                "at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "tests": digests,
+            },
+            indent=2,
+        )
+    )
+    print(f"recorded: {len(digests)} tests, suite exit {status}")
+
+
+def check_green(config, issue, command, report):
+    """The suite passes, and the tests were seen to fail first."""
+    spec = Spec(find_spec(config, issue))
+    path = evidence_file(issue)
+    report.check(
+        path.is_file(),
+        f"there is no record of the tests for issue {issue} failing before the "
+        "code was written",
+    )
+    status = run_suite(command)
+    report.check(status == 0, f"the suite failed with exit status {status}")
+    if not path.is_file():
+        return
+    evidence = json.loads(path.read_text())
+    head = git("rev-parse", "HEAD").strip()
+    report.check(
+        evidence["head"] == head,
+        f"the failing run was recorded against commit {evidence['head'][:7]}, "
+        f"not the current {head[:7]}",
+    )
+    digests = test_digests(config, spec)
+    for scenario_id in spec.ids:
+        if digests.get(scenario_id) != evidence["tests"].get(scenario_id):
+            report.warn(
+                f"the test for @{scenario_id} was changed after it was seen to fail"
+            )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -412,7 +584,14 @@ def main():
         "--base", default="HEAD", help="commit the work started from"
     )
     commands.add_parser("closed")
+    commands.add_parser("state")
+    for name in ("red", "green"):
+        run_parser = commands.add_parser(name)
+        run_parser.add_argument("issue", type=int)
+        run_parser.add_argument("test_command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    if args.command in ("red", "green") and args.test_command[:1] == ["--"]:
+        args.test_command = args.test_command[1:]
 
     report = Report()
     try:
@@ -421,8 +600,14 @@ def main():
             check_spec(config, args.issue, report)
         elif args.command == "tests":
             check_tests(config, args.issue, args.base, report)
-        else:
+        elif args.command == "closed":
             check_closed(config, report)
+        elif args.command == "state":
+            check_state(config, report)
+        elif args.command == "red":
+            record_red(config, args.issue, args.test_command, report)
+        else:
+            check_green(config, args.issue, args.test_command, report)
     except CannotRun as error:
         print(f"CANNOT RUN  {error}")
         return 2

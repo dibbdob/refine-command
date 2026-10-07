@@ -113,8 +113,11 @@ Some promises of the process are too important to rest on careful reading, so a 
 | `spec <issue>` | refine, before the review and again when setting Ready; implement, before building | a scenario has no ID, an ID is malformed or used twice, a requirement is cited by no scenario, a scenario is missing from the testing strategy, a link does not resolve, or a Ready specification has open items |
 | `tests <issue>` | implement, after the suite passes | a scenario has no test carrying its ID, a test carries an ID no specification defines, or the test for any other scenario was changed or removed without the specification listing it |
 | `closed` | both, before anything is committed | a specification or ADR belonging to a closed issue was edited after the issue closed |
+| `red <issue> -- <test command>` | implement, after writing the tests and before any code | a scenario has no test yet, or the suite already passes |
+| `green <issue> -- <test command>` | implement, after the code | the suite fails, or no failing run was recorded first. Warns when a test was edited after it was seen to fail |
+| `state` | both, after the finish | a specification's status disagrees with its issue's label, its issue's text or the feature index; or an issue is closed while its specification is a Draft or one of its scenarios has no test |
 
-The second row is the guard against bending a test to get a green run. Test code written before scenarios had IDs cannot be tied to a specification, so a change to it is reported as a warning for a person to look at, not as a failure.
+The second row is the guard against bending a test to get a green run. `red` and `green` are the evidence that the tests came first; the record of the failing run is kept inside `.git`, not in your project's files. Test code written before scenarios had IDs cannot be tied to a specification, so a change to it is reported as a warning for a person to look at, not as a failure.
 
 What no script checks: whether the right questions were asked, whether an assumption is sensible, and whether a test really asserts what its scenario says.
 
@@ -273,6 +276,8 @@ To try a local checkout of this repository without installing it:
 ```bash
 claude --plugin-dir /path/to/refine-command
 ```
+
+A workflow in this repository, `.github/workflows/version.yml`, fails any push or pull request that changes a command or script without raising the version in `.claude-plugin/plugin.json`. An installed plugin only updates when its version changes.
 
 To check the manifests:
 
