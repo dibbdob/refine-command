@@ -35,6 +35,7 @@ TAG = re.compile(r"@(\d{4}-\d{2})(?![\w-])")
 AREA = re.compile(r"@area:(\S+)")
 AREA_NAME = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*(/[a-z0-9]+(-[a-z0-9]+)*)*$")
 CONTINUES = ("Examples:", "Scenarios:", "|", '"""')
+TAG_ONLY = re.compile(r"^\W*(@\d{4}-\d{2}\W*)+$")
 SCENARIO = re.compile(r"^\s*Scenario( Outline| Template)?:\s*(.*)$")
 REQUIREMENT = re.compile(r"^\s*-\s+\**(FR-\d+)\**\s*:")
 LINK = re.compile(r"\]\(([^)#\s]+)(#[^)]*)?\)")
@@ -768,6 +769,32 @@ def run_suite(command):
         raise CannotRun(f"{' '.join(command)}: {error}")
 
 
+def only_ids_added(config):
+    """True when the working copy differs from HEAD only by scenario ID lines.
+
+    That is a baseline: existing tests are being tied to scenarios and nothing
+    else is changing, so there is no failing run to record.
+    """
+    docs = (config["featuresDir"] + "/", config["adrDir"] + "/")
+    behaviour = config["behaviourDir"] + "/"
+    untracked = git("ls-files", "-o", "--exclude-standard").splitlines()
+    if any(not path.startswith(docs + (behaviour,)) for path in untracked):
+        return False
+    added, in_docs = False, False
+    for line in git("diff", "-U0", "--no-renames", "HEAD").splitlines():
+        if line.startswith("diff --git "):
+            in_docs = line.split(" b/", 1)[-1].startswith(docs + (behaviour,))
+        elif in_docs or line.startswith(("+++", "---")):
+            continue
+        elif line.startswith("-"):
+            return False
+        elif line.startswith("+") and line[1:].strip():
+            if not TAG_ONLY.match(line[1:]):
+                return False
+            added = True
+    return added
+
+
 def record_red(config, issue, command, report):
     """The new tests exist and the suite fails, before the code is written."""
     spec = Spec(find_spec(config, issue))
@@ -781,11 +808,18 @@ def record_red(config, issue, command, report):
             f"@{scenario_id} has no test yet; every test is written before the code",
         )
     status = run_suite(command)
-    report.check(
-        status != 0,
-        "the suite passed before the code was written, "
-        "so the new tests do not show that anything was missing",
-    )
+    baseline = status == 0 and only_ids_added(config)
+    if baseline:
+        print(
+            "baseline: the only change is scenario IDs on existing tests, "
+            "so the suite is expected to pass"
+        )
+    else:
+        report.check(
+            status != 0,
+            "the suite passed before the code was written, "
+            "so the new tests do not show that anything was missing",
+        )
     if report.failures:
         return
     path = evidence_file(issue)
@@ -796,6 +830,7 @@ def record_red(config, issue, command, report):
                 "head": git("rev-parse", "HEAD").strip(),
                 "command": command,
                 "exit": status,
+                "baseline": baseline,
                 "at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "tests": digests,
             },

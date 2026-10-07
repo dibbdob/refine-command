@@ -96,6 +96,15 @@ A new issue often changes something already in force. The change is written down
 - **Record it in one section.** The new specification has a section, Changes to current behaviour, with one line for each scenario in force that it replaces or removes: its ID, its title, and what becomes of it (replaced by a named scenario here, or removed). Write "None." when there is nothing. If the project's template has no such section, add it after Out of scope. The script that generates the behaviour folder drops every scenario listed here, so the list has to be complete and has to use the IDs.
 - **Carry it through the draft.** A scenario that replaces one in force is written out in full in the new specification under the same title, with a new ID. The implementation plan names each existing test to change or remove, and the testing strategy says so against the scenario. A new ADR that replaces an earlier decision names the one it supersedes in its Context.
 
+### Recording a baseline
+
+A project may have specifications written before scenarios had IDs. Their behaviour is real but is not in the folder, and they cannot be edited. An issue that asks for that behaviour to be recorded is a baseline, and it is refined like any other with these differences:
+
+- **It restates what is in force.** Write out every scenario that holds today, taken from the earlier specifications and checked against the tests, each with an ID and an area. Leave out any that a later specification replaced or removed. This is the one case where scenarios already in force are written again.
+- **It changes nothing.** Changes to current behaviour is "None.", and nothing new goes into Out of scope beyond saying that behaviour does not change.
+- **Each scenario points at its existing test.** The testing strategy names the existing test that proves each scenario. If a scenario in force has no test, or a test has no scenario, that is a question for the Intent round, not something to settle quietly.
+- **Its implementation plan is tagging.** The only step is to add each scenario's ID above its existing test. No test is written, changed or removed, and no code is touched.
+
 ### Areas
 
 Every scenario belongs to one area, which decides the file it will appear in.
