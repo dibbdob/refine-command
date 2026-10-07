@@ -1,12 +1,12 @@
 {
   "name": "refine-command",
-  "description": "A backlog refinement command for Claude Code",
+  "description": "Backlog commands for Claude Code: refine an issue into a specification, then implement it",
   "owner": { "name": "Jan Wilson" },
   "plugins": [
     {
       "name": "backlog",
       "source": "./",
-      "description": "Turn a GitHub issue into a feature specification a team can build from, asking only what the team alone can answer"
+      "description": "Take a GitHub issue from a rough idea to working, tested code: refine it into a specification a team can build from, then implement it test-first"
     }
   ]
 }

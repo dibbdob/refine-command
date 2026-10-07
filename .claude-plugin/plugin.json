@@ -1,7 +1,7 @@
 {
   "name": "backlog",
-  "description": "Turn a GitHub issue into a feature specification a team can build from, asking only what the team alone can answer",
-  "version": "1.2.0",
+  "description": "Take a GitHub issue from a rough idea to working, tested code: refine it into a specification a team can build from, then implement it test-first",
+  "version": "1.2.1",
   "license": "MIT",
   "author": { "name": "Jan Wilson" }
 }

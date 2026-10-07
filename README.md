@@ -1,18 +1,20 @@
-# refine
+# backlog
 
-A Claude Code command that turns a GitHub issue into a feature specification a team can build from. You give it an issue number; it drafts the specification, asks you only what it cannot work out, and checks the result against your Definition of Ready.
+A Claude Code plugin that takes a GitHub issue from a rough idea to working, tested code. It has two commands:
 
 ```
 /backlog:refine 42
 ```
 
-It works in a new project with nothing set up, and in an existing project that already has its own templates.
-
-A second command builds what a Ready specification describes:
+turns the issue into a feature specification a team can build from. It drafts the specification, asks you only what it cannot work out, and checks the result against your Definition of Ready.
 
 ```
 /backlog:implement 42
 ```
+
+builds what a Ready specification describes, test-first, and closes the issue.
+
+It works in a new project with nothing set up, and in an existing project that already has its own templates.
 
 ## Quick start
 
@@ -30,10 +32,34 @@ You need [Claude Code](https://claude.com/claude-code) and the [GitHub CLI](http
 
 2. Start a new Claude Code session in your project and run `/backlog:refine` with an issue number.
 3. Answer a handful of questions, read the list of assumptions it made, and say yes to the finish.
+4. Run `/backlog:implement` with the same number and say yes when the tests pass.
 
 There is no configuration to write. On the first run the command finds your repository and creates the templates it needs. Everything below is reference.
 
-## What it does
+## From issue to done
+
+Starting from an issue on GitHub that nobody has refined:
+
+1. **Refine it.** Run `/backlog:refine <issue-number>`.
+   - **Intent:** it asks only what it cannot work out, usually zero to five questions. Pick an option for each.
+   - **Review:** it shows the assumptions, the scenarios and the Definition of Ready table. Accept them, or say what to change.
+   - **Finish:** it lists the commit, the push, the issue update and the label. Say yes.
+
+   The issue now carries the agreed summary and a link to a Ready specification in `docs/specs`.
+
+2. **Implement it.** Run `/backlog:implement <issue-number>`.
+
+   It asks nothing up front. It writes a failing test for each scenario, makes them pass, runs the whole suite and reports the numbers. Then it lists the commit, the push and closing the issue. Say yes.
+
+   The code is on your branch with every test passing, and the issue is closed.
+
+Three things can interrupt that:
+
+- **A thin issue.** If it has no clear narrative, problem or success criteria, refine proposes them in the Intent round.
+- **A failing test.** Implement reports the failure and offers neither the commit nor the close.
+- **A wrong specification.** If implement finds that the specification contradicts itself or the code, it stops. Run `/backlog:refine` on the same number to revise it.
+
+## What refine does
 
 The command drafts the whole specification itself and keeps its questions to three rounds:
 
@@ -65,7 +91,7 @@ Two situations are handled on the way in:
 
 The default, lean mode, suits one person or a small team. When several people are in the session, or nothing should be assumed, set `"mode": "thorough"` in the configuration. The command then proposes each default for you to choose instead of applying it, and agrees the specification section by section.
 
-## Implementing a specification
+## What implement does
 
 `/backlog:implement <issue-number>` builds the feature from its specification. It asks nothing about what to build, because that was agreed in refinement.
 
