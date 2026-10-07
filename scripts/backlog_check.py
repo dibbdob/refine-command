@@ -27,6 +27,8 @@ CHANGES_SECTION = "Changes to current behaviour"
 OLD_CHANGES_SECTION = "Changes to earlier specifications"
 GENERATED = "<!-- Generated from the specifications by the backlog plugin. Do not edit. -->"
 INCLUDED = "Specifications included:"
+AUTO_ACCEPTED = "Accepted under the auto-accept policy"
+SETTLED = "Settled by convention"
 STATUSES = ("Draft", "Ready")
 
 # A scenario ID is the specification's number and a sequence: 0042-03.
@@ -97,6 +99,8 @@ def load_config():
         "adrDir": paths.get("adrDir", "docs/decisions").rstrip("/"),
         "featureIndex": paths.get("featureIndex", "docs/specs/README.md"),
         "behaviourDir": paths.get("behaviourDir", "docs/behaviour").rstrip("/"),
+        "conventions": paths.get("conventions", "docs/specs/CONVENTIONS.md"),
+        "autoAccept": bool(config.get("process", {}).get("autoAccept", False)),
         "readyLabel": config.get("finalise", {}).get("readyLabel", "ready"),
         "testPaths": config.get("implement", {}).get("testPaths"),
     }
@@ -311,9 +315,47 @@ def check_spec(config, issue, report):
             f"{name}: scenario has no area, or one that is not lowercase words "
             f"joined by hyphens and slashes: {block['title']} ({area})",
         )
-    for area in sorted({b["area"] for b in spec.blocks if b["area"]} - existing_areas):
-        if AREA_NAME.match(area):
-            report.warn(f"{name}: creates a new area in the behaviour folder: {area}")
+    new_areas = sorted(
+        area
+        for area in {b["area"] for b in spec.blocks if b["area"]} - existing_areas
+        if AREA_NAME.match(area)
+    )
+    for area in new_areas:
+        report.warn(f"{name}: creates a new area in the behaviour folder: {area}")
+
+    assumptions = spec.section("Assumptions")
+    agreed = set(
+        re.findall(r"^\|\s*(C-\d+)\s*\|", read(config["conventions"]), re.MULTILINE)
+    )
+    for convention in sorted(set(re.findall(r"\bC-\d+\b", assumptions))):
+        report.check(
+            convention in agreed,
+            f"{name}: cites {convention}, which is not in {config['conventions']}",
+        )
+    if AUTO_ACCEPTED in assumptions:
+        # Nobody reviewed this specification, so it must have left nothing to review.
+        listed = [
+            line.strip()
+            for line in assumptions.splitlines()
+            if line.lstrip().startswith("- ") and SETTLED not in line
+        ]
+        report.check(
+            config["autoAccept"],
+            f"{name}: marked as auto-accepted, but process.autoAccept is not on",
+        )
+        report.check(
+            not listed,
+            f"{name}: marked as auto-accepted, but lists {len(listed)} assumptions "
+            "that nobody has reviewed",
+        )
+        report.check(
+            not spec.retires,
+            f"{name}: marked as auto-accepted, but changes behaviour in force",
+        )
+        report.check(
+            not new_areas,
+            f"{name}: marked as auto-accepted, but creates a new area",
+        )
     built = spec.number in included_specs(config)
     for scenario_id in sorted(set() if built else spec.retires):
         report.check(

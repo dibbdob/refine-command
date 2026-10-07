@@ -29,11 +29,13 @@ Everything specific to the project comes from `.claude/refine.json` at the proje
     "adrDir": "docs/decisions",
     "adrTemplate": "docs/decisions/TEMPLATE.md",
     "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md",
-    "behaviourDir": "docs/behaviour"
+    "behaviourDir": "docs/behaviour",
+    "conventions": "docs/specs/CONVENTIONS.md"
   },
   "process": {
     "mode": "lean",
-    "deliveryBudget": "one working day"
+    "deliveryBudget": "one working day",
+    "autoAccept": false
   },
   "finalise": {
     "commit": true,
@@ -47,6 +49,8 @@ Everything specific to the project comes from `.claude/refine.json` at the proje
 - `repo` is the GitHub repository that holds the issues, as `owner/name`. Pass it to every `gh` call with `--repo`.
 - `paths` are relative to the project root. Set `paths.issueTemplate` to `""` to do without an issue template.
 - `paths.behaviourDir` holds what the system does today, generated from the specifications that have been built. See [Current behaviour](#current-behaviour). This command reads it and never writes it.
+- `paths.conventions` lists what the team has agreed once for every feature. See [Conventions](#conventions).
+- `process.autoAccept`, when true, lets a specification that left nothing to review become Ready without waiting for the team. See [Auto-accept](#auto-accept).
 - `process.mode` is `lean` or `thorough`; see [Thorough mode](#thorough-mode).
 - `process.deliveryBudget` is the largest a single feature may be.
 - `finalise` controls the finish. Set `finalise.readyLabel` to `""` to leave issue labels alone.
@@ -68,11 +72,20 @@ Never overwrite or reformat a document the project already has. The project's ow
 - **Check what can be checked.** Before asking a question or writing a statement about how something behaves, find out what is true: how a tool behaves, whether a repository setting is available, whether a dependency exists. Use read-only checks, and try things out only in a scratch location. Never change the project or GitHub in order to check. If a check shows that something the issue asks for cannot be met as things stand, that is a question for the Intent round.
 - **Hold every answer against what is already agreed.** When an answer contradicts the issue, the narrative, a requirement or a scenario, do not pick one. Show both statements, ask which stands, and bring the other into line.
 - **Propose, do not interrogate.** Every question comes with two or three worded options, each written as it would appear in the specification, plus room for the team's own answer.
-- **Write down what you assumed.** Every default you applied goes in the specification's Assumptions section, one line each. If the project's template has no such section, add one before the open items.
+- **Write down what you assumed.** Every default you applied goes in the specification's Assumptions section, one line each, unless a convention already settles it. If the project's template has no such section, add one before the open items.
+
+## Conventions
+
+`paths.conventions` holds general rules the team has agreed once, so that they are not assumed afresh, and reviewed afresh, for every feature. Each has a number, such as C-3.
+
+- **A convention is settled.** Where one covers a default you would otherwise apply, apply the convention and do not list it as an assumption. End the Assumptions section with one line naming those you relied on: `- Settled by convention: C-1, C-3.` Leave the line out when there are none.
+- **A convention is general.** It is a rule that would hold for any feature in this project, such as how names are written or who covers which role. A fact about one feature is never a convention.
+- **Only the team adds one.** After the team has accepted the assumptions in the review, look for any that are general in this sense and would recur. Offer them, reworded as rules, for the team to choose from. Append those chosen to the table in `paths.conventions` with the next free number and today's date. Never add one unasked, and never as part of an auto-accepted specification.
+- **An issue that goes against a convention** is a contradiction for the Intent round: show both and ask which stands. If the convention is to change, edit the file; it is a living document, not closed work.
 
 ## Before the Intent round
 
-1. Read the issue, the feature template, the Definition of Ready, the feature index and the project's `CLAUDE.md` if there is one.
+1. Read the issue, the feature template, the Definition of Ready, the feature index, the conventions and the project's `CLAUDE.md` if there is one.
 2. Look in `paths.featuresDir` for a specification that already exists for this issue: a file whose name starts with the issue number padded to four digits. If there is one, see [Resuming](#resuming).
 3. Look at the project itself: what it is built with, how it is tested, how it is laid out. The design and the testing strategy follow what is already there.
 4. Run whatever checks the issue calls for.
@@ -180,13 +193,26 @@ Show the team the draft in this order, shortest first:
 
 Ask what they want changed. Apply the changes, recheck coverage and the Definition of Ready, and show what moved. Repeat until the team agrees. An assumption the team overrules is replaced by their answer and leaves the Assumptions section; one they accept stays there as a record that it was a default.
 
+### Auto-accept
+
+When `process.autoAccept` is true, a specification that left nothing for the team to review does not wait for them. All of these must hold:
+
+- No question was asked in the Intent round, and no ADR was written.
+- The Assumptions section lists nothing except the conventions relied on.
+- Changes to current behaviour is "None." and no new area is created.
+- The checker reports no FAIL and no WARN.
+
+Then write, as the first line of the Assumptions section, `Accepted under the auto-accept policy on <date>: no assumption was made beyond the conventions.`, set the status to Ready, run the checker again, and go straight to the finish. Show the review and the finish list together and ask for the single yes the finish needs; the finish is never skipped. The checker fails a specification that carries that line without meeting the conditions.
+
+If any condition does not hold, the review waits for the team as usual. A Definition of Ready item about the team reading every assumption is met when there are none to read.
+
 Set the status to **Ready** when every Definition of Ready item is met, and otherwise leave it **Draft** with the open items listed in the specification. After setting it to Ready, run the checker again; if it fails, the specification is not Ready.
 
 ## Round 3: Finish
 
 Add or update the feature's entry in `paths.featureIndex`. Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/backlog_check.py" closed` and, if it fails, stop and show what it found: something belonging to a closed issue has been edited and has to be put back first. Then show the team, as one numbered list, everything that is about to leave the working copy, with the exact text of anything that will be written to GitHub. Present it as what will happen and ask for a single yes. The team can strike a line by saying so; a line is never skipped just because nobody mentioned it.
 
-1. **Commit**, if `finalise.commit` is true: the specification, any ADRs, the feature index, and any first-run files not yet committed. Message from `finalise.commitMessage`, with `{issue}` and `{title}` filled in.
+1. **Commit**, if `finalise.commit` is true: the specification, any ADRs, the feature index, the conventions if any were added, and any first-run files not yet committed. Message from `finalise.commitMessage`, with `{issue}` and `{title}` filled in.
 2. **Push** of the current branch, so that links to the specification resolve.
 3. **Issue**, if `finalise.updateIssue` is true: rewrite the issue's description as a summary of what was agreed, in the form below.
 4. **Label**, if `finalise.readyLabel` is not empty: added when Ready, removed when a Ready specification has gone back to Draft, and created in `repo` if it does not exist.
@@ -357,7 +383,7 @@ A specification is Ready when someone who was not in the session could build the
 ## How it will be built
 
 - [ ] Choices that would be costly to reverse have been made by the team and recorded as decisions
-- [ ] The team has read every assumption and accepted or overruled it
+- [ ] The team has accepted or overruled every assumption, or none was made beyond the agreed conventions
 - [ ] Each scenario has a stated way of being verified
 
 ## Whether it can start
@@ -366,6 +392,19 @@ A specification is Ready when someone who was not in the session could build the
 - [ ] It fits the delivery budget, or is split into phases that each do
 - [ ] Work outside the code has a named owner
 - [ ] There are no open items
+````
+
+### Conventions
+
+Written to `paths.conventions`.
+
+````markdown
+# Conventions
+
+General rules the team has agreed once, so that they are not assumed and reviewed again for every feature. The refine command treats each one as settled. This is a living document: change or remove a rule here when the team changes its mind.
+
+| No. | Convention | Agreed |
+|-----|------------|--------|
 ````
 
 ### Issue template

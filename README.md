@@ -104,6 +104,16 @@ The default, lean mode, suits one person or a small team. When several people ar
 
 It builds nothing beyond the specification, never changes a test to get a green run, and never edits the specification. If the specification turns out to be wrong or impossible, it stops and sends you back to `/backlog:refine`.
 
+## Fewer stops
+
+Refine stops for the team at the review because its assumptions are where a wrong guess would hide. Two things reduce how often that stop is needed, without removing a person from anything new.
+
+**Conventions.** Many assumptions are the same every time: how names are written, who covers which role, that there are no performance thresholds. After a review, refine offers the general ones as conventions. Those you choose go in `docs/specs/CONVENTIONS.md` with a number, and from then on they are settled: refine applies them and no longer lists them for review. You approve each rule once.
+
+**Auto-accept.** With `"autoAccept": true`, a specification becomes Ready without waiting when it left nothing to review: no question was needed, no assumption was made beyond the conventions, it changes nothing already in force and creates no new area, and the checker is clean. The specification says it was accepted under the policy, and the checker fails any specification that claims so without meeting the conditions. The finish, which commits, pushes and edits the issue, still asks for its yes.
+
+Anything novel still stops for you. That is the point: the stop is spent where judgement is needed.
+
 ## Current behaviour
 
 The numbered specifications are a history: each says what one issue changed and why, and is never edited once its issue is closed. On their own they do not say what the system does now; for that you would have to read them all in order.
@@ -134,7 +144,7 @@ Some promises of the process are too important to rest on careful reading, so a 
 
 | Command | Run by | Fails when |
 |---|---|---|
-| `spec <issue>` | refine, before the review and again when setting Ready; implement, before building | a scenario has no ID, an ID is malformed or used twice, a requirement is cited by no scenario, a scenario is missing from the testing strategy, a scenario has no area, a scenario listed as changed is not in force, a link does not resolve, or a Ready specification has open items. Warns when a specification creates a new area |
+| `spec <issue>` | refine, before the review and again when setting Ready; implement, before building | a scenario has no ID, an ID is malformed or used twice, a requirement is cited by no scenario, a scenario is missing from the testing strategy, a scenario has no area, a scenario listed as changed is not in force, a link does not resolve, a convention it cites does not exist, a Ready specification has open items, or it is marked auto-accepted without meeting the conditions. Warns when a specification creates a new area |
 | `tests <issue>` | implement, after the suite passes | a scenario has no test carrying its ID, a test carries an ID no specification defines, or the test for any other scenario was changed or removed without the specification listing it |
 | `closed` | both, before anything is committed | a specification or ADR belonging to a closed issue was edited after the issue closed |
 | `red <issue> -- <test command>` | implement, after writing the tests and before any code | a scenario has no test yet, or the suite already passes. A passing suite is accepted only for a baseline, where scenario IDs on existing tests are the only change |
@@ -196,7 +206,7 @@ To have a project suggest the plugin to everyone who opens it, add this to the p
 The first time you run the command in a project, it sets itself up without asking and tells you what it did:
 
 1. **Repository.** It takes the checkout's GitHub remote and saves it to `.claude/refine.json`. It asks only if it finds none.
-2. **Documents.** It creates any of the five documents below that the project does not have, from built-in defaults.
+2. **Documents.** It creates any of the six documents below that the project does not have, from built-in defaults.
 
 | Document | Default path |
 |---|---|
@@ -205,6 +215,7 @@ The first time you run the command in a project, it sets itself up without askin
 | Definition of Ready | `docs/specs/READY.md` |
 | ADR template | `docs/decisions/TEMPLATE.md` |
 | Issue template | `.github/ISSUE_TEMPLATE/feature.md` |
+| Conventions | `docs/specs/CONVENTIONS.md` |
 
 The issue template gives new issues a narrative, problem and success criteria, which is what a session starts from; the more complete the issue, the fewer questions the command asks. GitHub only picks it up once it is on the repository's default branch. It is skipped if the project already has issue templates, and setting `paths.issueTemplate` to `""` turns it off.
 
@@ -229,11 +240,13 @@ If the project already has a feature template, a Definition of Ready or an ADR t
     "adrDir": "docs/decisions",
     "adrTemplate": "docs/decisions/TEMPLATE.md",
     "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md",
-    "behaviourDir": "docs/behaviour"
+    "behaviourDir": "docs/behaviour",
+    "conventions": "docs/specs/CONVENTIONS.md"
   },
   "process": {
     "mode": "lean",
-    "deliveryBudget": "one working day"
+    "deliveryBudget": "one working day",
+    "autoAccept": false
   },
   "finalise": {
     "commit": true,
@@ -255,6 +268,8 @@ If the project already has a feature template, a Definition of Ready or an ADR t
 | `repo` | GitHub repository that holds the issues, as `owner/name`. Used for every `gh` call, so the git remotes of the checkout do not matter. |
 | `paths.*` | Where the documents live and where new ones are written, relative to the project root. |
 | `paths.behaviourDir` | Where the description of current behaviour is generated. See [Current behaviour](#current-behaviour). |
+| `paths.conventions` | General rules the team has agreed once. See [Fewer stops](#fewer-stops). |
+| `process.autoAccept` | Let a specification that left nothing to review become Ready without waiting. Off by default. See [Fewer stops](#fewer-stops). |
 | `process.mode` | `lean` (default) or `thorough`. See [Thorough mode](#thorough-mode). |
 | `process.deliveryBudget` | The largest a single feature may be. Anything bigger is split into phases. |
 | `finalise.commit` | Commit the specification at the end of the session. |
