@@ -349,6 +349,14 @@ claude --plugin-dir /path/to/refine-command
 
 A workflow in this repository, `.github/workflows/version.yml`, fails any push or pull request that changes a command or script without raising the version in `.claude-plugin/plugin.json`. An installed plugin only updates when its version changes.
 
+The checker has its own tests. Each builds a small project in a temporary git repository and runs the checker against it, with a stand-in for the GitHub CLI:
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+A second workflow, `.github/workflows/tests.yml`, runs them on every push and pull request.
+
 To check the manifests:
 
 ```bash
@@ -363,6 +371,7 @@ The layout:
 commands/refine.md                the refine command, including the default documents
 commands/implement.md             the implement command
 scripts/backlog_check.py          the checks that need no judgement
+tests/test_backlog_check.py       tests for the checker
 ```
 
 ## Licence

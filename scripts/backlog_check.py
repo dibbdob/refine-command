@@ -393,8 +393,15 @@ def check_spec(config, issue, report):
     return spec
 
 
+def document_dirs(config):
+    """Folders of documents, where a scenario ID names a scenario, not a test."""
+    return tuple(
+        config[key] + "/" for key in ("featuresDir", "adrDir", "behaviourDir")
+    )
+
+
 def project_files(config):
-    docs = (config["featuresDir"] + "/", config["adrDir"] + "/")
+    docs = document_dirs(config)
     listed = git("ls-files", "-co", "--exclude-standard").splitlines()
     return [path for path in listed if not path.startswith(docs)]
 
@@ -459,7 +466,7 @@ def check_tests(config, issue, base, report):
 
     # Existing tests may be changed or removed only where the specification says so.
     allowed = set(spec.ids) | spec.retires
-    docs = (config["featuresDir"] + "/", config["adrDir"] + "/")
+    docs = document_dirs(config)
     for entry in git("diff", "--name-status", "--no-renames", base).splitlines():
         status, path = entry.split("\t", 1)
         if status == "A" or path.startswith(docs):
@@ -935,15 +942,14 @@ def only_ids_added(config):
     That is a baseline: existing tests are being tied to scenarios and nothing
     else is changing, so there is no failing run to record.
     """
-    docs = (config["featuresDir"] + "/", config["adrDir"] + "/")
-    behaviour = config["behaviourDir"] + "/"
+    docs = document_dirs(config)
     untracked = git("ls-files", "-o", "--exclude-standard").splitlines()
-    if any(not path.startswith(docs + (behaviour,)) for path in untracked):
+    if any(not path.startswith(docs) for path in untracked):
         return False
     added, in_docs = False, False
     for line in git("diff", "-U0", "--no-renames", "HEAD").splitlines():
         if line.startswith("diff --git "):
-            in_docs = line.split(" b/", 1)[-1].startswith(docs + (behaviour,))
+            in_docs = line.split(" b/", 1)[-1].startswith(docs)
         elif in_docs or line.startswith(("+++", "---")):
             continue
         elif line.startswith("-"):
