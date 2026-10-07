@@ -2,7 +2,7 @@
 
 Applies to: `**/*.cs`, `**/appsettings*.json`
 
-Before designing or writing anything this covers, load the `microsoft-extensions-configuration` skill of the dotnet-standards plugin. It holds the detail and the examples.
+Before designing or writing anything this covers, load the `dotnet-standards:microsoft-extensions-configuration` skill. It holds the detail and the examples. Where a rule or the skill leaves a question about the language, the framework or a Microsoft library, look it up with the `microsoft-learn` connector of the dotnet-standards plugin; do not answer it from memory.
 
 | No. | Rule | Why |
 |-----|------|-----|

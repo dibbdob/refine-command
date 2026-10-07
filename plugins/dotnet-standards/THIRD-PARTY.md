@@ -2,7 +2,7 @@
 
 The six folders under `skills/` are copied without change from [Aaronontheweb/dotnet-skills](https://github.com/Aaronontheweb/dotnet-skills), release v1.6.0, commit `784ada78c1821186a57f64108878cc6b0e1d2126`.
 
-| Folder | Skill |
+| Folder | Name in the skill's own header |
 |--------|-------|
 | `skills/csharp-coding-standards` | `modern-csharp-coding-standards` |
 | `skills/csharp-api-design` | `api-design` |

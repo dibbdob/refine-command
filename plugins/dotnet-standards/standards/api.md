@@ -2,7 +2,7 @@
 
 Applies to: `**/*.cs`
 
-Covers types and members that code outside the solution can call, and anything written to a wire or a store that another version will read. Before designing or writing anything this covers, load the `api-design` skill of the dotnet-standards plugin. It holds the detail and the examples.
+Covers types and members that code outside the solution can call, and anything written to a wire or a store that another version will read. Before designing or writing anything this covers, load the `dotnet-standards:csharp-api-design` skill. It holds the detail and the examples.
 
 | No. | Rule | Why |
 |-----|------|-----|

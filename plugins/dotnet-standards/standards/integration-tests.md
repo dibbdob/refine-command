@@ -2,7 +2,7 @@
 
 Applies to: `tests/**/*.cs`
 
-Covers tests of anything that leaves the process: a database, a cache, a queue. Before designing or writing anything this covers, load the `testcontainers-integration-tests` skill of the dotnet-standards plugin. It holds the detail and the examples. Its examples use xUnit; follow the test framework the project already uses.
+Covers tests of anything that leaves the process: a database, a cache, a queue. Before designing or writing anything this covers, load the `dotnet-standards:testcontainers` skill. It holds the detail and the examples. Its examples use xUnit; follow the test framework the project already uses.
 
 | No. | Rule | Why |
 |-----|------|-----|
