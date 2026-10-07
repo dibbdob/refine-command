@@ -490,6 +490,82 @@ class TestsCheckTests(CheckerCase):
         self.rewrite_tests(["0001-01", "0001-02", "0002-01"], tail=guard)
         self.assertPasses("tests", 2)
 
+    def test_a_new_class_of_tests_may_follow_the_last_existing_test(self):
+        # The header of the new class lands between the last old test and the
+        # first new tag; it is not part of the old test.
+        old = (
+            "import unittest\n\n\n"
+            "class ThingTests(unittest.TestCase):\n"
+            "    # @0001-01\n    def test_one(self):\n        self.assertTrue(True)\n\n"
+            "    # @0001-02\n    def test_two(self):\n        self.assertTrue(True)\n"
+        )
+        guard = '\n\nif __name__ == "__main__":\n    unittest.main()\n'
+        self.project.write("tests/test_thing.py", old + guard)
+        self.project.commit()
+        self.add_second_spec()
+        added = (
+            "\n\nclass OtherTests(unittest.TestCase):\n"
+            "    # @0002-01\n    def test_three(self):\n        self.assertTrue(True)\n"
+        )
+        self.project.write("tests/test_thing.py", old + added + guard)
+        self.assertPasses("tests", 2)
+
+    def test_a_change_inside_the_last_test_of_a_class_is_still_caught(self):
+        old = (
+            "class ThingTests:\n"
+            "    # @0001-01\n    def test_one(self):\n        assert True\n\n"
+            "    # @0001-02\n    def test_two(self):\n        assert True\n"
+        )
+        self.project.write("tests/test_thing.py", old)
+        self.project.commit()
+        self.add_second_spec()
+        self.project.write(
+            "tests/test_thing.py",
+            old.replace("def test_two(self):\n        assert True", "def test_two(self):\n        assert 1")
+            + "\n\nclass OtherTests:\n    # @0002-01\n    def test_three(self):\n        assert True\n",
+        )
+        self.assertFails("tests", 2, saying="the test for @0001-02 was changed")
+
+    def test_a_test_with_blank_lines_and_a_decorator_is_compared_whole(self):
+        old = (
+            "# @0001-01\n@decorated\ndef test_one():\n    first = 1\n\n    assert first\n\n\n"
+            "# @0001-02\ndef test_two():\n    assert True\n"
+        )
+        self.project.write("tests/test_thing.py", old)
+        self.project.commit()
+        self.add_second_spec()
+        self.project.write(
+            "tests/test_thing.py",
+            old.replace("    assert first", "    assert first == 1")
+            + "\n\n# @0002-01\ndef test_three():\n    assert True\n",
+        )
+        self.assertFails("tests", 2, saying="the test for @0001-01 was changed")
+
+    def test_tests_closed_by_a_bracket_are_compared_whole(self):
+        old = (
+            "// @0001-01\nit('one', () => {\n  expect(1).toBe(1);\n});\n\n"
+            "// @0001-02\nit('two', () => {\n  expect(2).toBe(2);\n});\n"
+        )
+        self.project.write("tests/thing.test.js", old)
+        (self.project.dir / "tests/test_thing.py").unlink()
+        self.project.commit()
+        self.add_second_spec()
+        added = "\n// @0002-01\nit('three', () => {\n  expect(3).toBe(3);\n});\n"
+        self.project.write("tests/thing.test.js", old + added)
+        self.assertPasses("tests", 2)
+        self.project.write(
+            "tests/thing.test.js", old.replace("toBe(2)", "toBeTruthy()") + added
+        )
+        self.assertFails("tests", 2, saying="the test for @0001-02 was changed")
+
+    def test_changing_code_that_follows_a_test_is_a_warning(self):
+        guard = 'if __name__ == "__main__":\n    unittest.main()\n'
+        self.rewrite_tests(["0001-01", "0001-02"], tail=guard)
+        self.project.commit()
+        self.rewrite_tests(["0001-01", "0001-02"], tail=guard.replace("main()", "main(verbosity=2)"))
+        output = self.assertPasses("tests", 1, warnings=1)
+        self.assertIn("existing test code with no scenario ID was changed", output)
+
     def test_a_scenario_verified_by_hand_needs_no_test(self):
         self.write_spec(2, scenarios=[scenario(1, number=2, automated="No")])
         output = self.assertPasses("tests", 2, warnings=1)

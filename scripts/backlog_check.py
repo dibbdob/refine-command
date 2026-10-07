@@ -478,14 +478,11 @@ def check_tests(config, issue, base, report):
         old_untagged, old_tests = split_tests(before)
         _, new_tests = split_tests(after)
 
-        for position, (ids, old_body) in enumerate(old_tests):
+        for ids, old_body in old_tests:
             new_body = next(
                 (body for new_ids, body in new_tests if new_ids == ids), None
             )
-            is_last = position == len(old_tests) - 1
-            if new_body == old_body or (
-                is_last and moved_tail(old_body, new_body, after)
-            ):
+            if new_body == old_body:
                 continue
             what = "removed" if new_body is None else "changed"
             for scenario_id in ids:
@@ -508,34 +505,44 @@ def check_tests(config, issue, base, report):
                 )
 
 
+def indent_of(line):
+    expanded = line.expandtabs()
+    return len(expanded) - len(expanded.lstrip())
+
+
 def split_tests(lines):
-    """Split a file into its untagged lines and the text that follows each tag."""
-    untagged, tests = [], []
+    """Split a file into the test that follows each tag, and everything else.
+
+    A test is the lines after its tag, down to where the indentation returns to
+    the tag's own level or less once the test's body has begun. What follows
+    it there, such as the header of the next class or a guard at the foot of
+    the file, is not part of the test, so adding tests after it does not count
+    as changing it.
+    """
+    other, tests, current = [], [], None
     for line in lines:
         ids = tuple(TAG.findall(line))
         if ids:
+            current = {"indent": indent_of(line), "in_body": False, "done": False}
             tests.append((ids, []))
-        elif tests:
-            tests[-1][1].append(line.rstrip())
-        elif line.strip():
-            untagged.append(line.strip())
+            continue
+        if current and not current["done"]:
+            if not line.strip():
+                tests[-1][1].append("")
+                continue
+            if indent_of(line) > current["indent"]:
+                current["in_body"] = True
+            elif current["in_body"]:
+                current["done"] = True
+            if not current["done"]:
+                tests[-1][1].append(line.rstrip())
+                continue
+        if line.strip():
+            other.append(line.strip())
     for _, body in tests:
         while body and not body[-1]:
             body.pop()
-    return untagged, tests
-
-
-def moved_tail(old_body, new_body, new_lines):
-    """True when the last test only lost trailing lines that still end the file.
-
-    New tests added after the last existing one take over whatever followed it,
-    such as a main guard at the bottom of the file.
-    """
-    if new_body is None or old_body[: len(new_body)] != new_body:
-        return False
-    tail = [line.strip() for line in old_body[len(new_body) :] if line.strip()]
-    end = [line.strip() for line in new_lines if line.strip()][-len(tail) :]
-    return bool(tail) and tail == end
+    return other, tests
 
 
 def check_closed(config, report):
