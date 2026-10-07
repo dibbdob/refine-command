@@ -35,6 +35,14 @@ With backlog:
 
 Once copied, the standards belong to the project. The team edits them, and setup never overwrites one.
 
+## Looking things up
+
+Four of the topics require the documentation to be checked, not remembered. Before a design or any code depends on it, each .NET or Microsoft library member the change newly uses, and each fact about how .NET or a Microsoft product behaves that the design rests on, is looked up with the Microsoft Learn connector. The design ends with a `Documentation checked:` line listing what was looked up and where, so a reviewer can see it was done.
+
+An earlier wording asked for a lookup only "where a question is left open". In a trial on a real project the connector was never used under that wording, and was used six times under this one for the same change.
+
+Setup never overwrites a standards file the project already has. A project set up before version 0.4.0 keeps the earlier wording until someone copies the paragraph headed "Check the documentation" from [standards/csharp.md](standards/csharp.md) into its own files.
+
 ## Everything shipped is referenced
 
 A skill or a connector is shipped only if a standard sends the reader to it, and no standard names one that is absent. A skill is named as Claude Code offers it, by its folder. This is checked:
